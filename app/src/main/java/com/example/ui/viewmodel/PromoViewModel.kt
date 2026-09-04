@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.PromoDatabase
@@ -34,6 +35,12 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     private val audioSynthEngine = AudioSynthEngine()
     private val voiceoverManager: VoiceoverManager
 
+    val isElevenLabsConfigured: Boolean
+        get() = voiceoverManager.isElevenLabsConfigured
+
+    private val _isVoiceSynthesizing = MutableStateFlow(false)
+    val isVoiceSynthesizing: StateFlow<Boolean> = _isVoiceSynthesizing.asStateFlow()
+
     init {
         val database = PromoDatabase.getDatabase(application)
         repository = PromoRepository(database.promoDao())
@@ -45,6 +52,10 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
             },
             onSpeechDone = { _ ->
                 audioSynthEngine.setDucking(false)
+            },
+            onSpeechDuration = { utteranceId, durationMs ->
+                // Scene duration synchronization if needed
+                Log.d("PromoViewModel", "Speech duration for $utteranceId: ${durationMs}ms")
             }
         )
 
@@ -235,6 +246,7 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setVoiceActor(actor: VoiceActor) {
         _voiceActor.value = actor
+        voiceoverManager.prefetchScenes(_scenes.value.map { it.voiceover to it.emotionalPreset }, actor)
     }
 
     fun setMusicTrack(track: MusicTrackOption) {
@@ -275,7 +287,15 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
         voiceoverManager.speak(
             text = scene.voiceover,
             voiceActor = _voiceActor.value,
-            emotionalPreset = scene.emotionalPreset
+            emotionalPreset = scene.emotionalPreset,
+            onSynthesisState = { isElevenLabs, isGenerating ->
+                _isVoiceSynthesizing.value = isGenerating
+                if (isElevenLabs && isGenerating) {
+                    _statusMessage.value = "🎙️ ElevenLabs: Generating HD voice for ${_voiceActor.value.voiceName}..."
+                } else if (isElevenLabs && !isGenerating) {
+                    _statusMessage.value = "🎙️ Playing ElevenLabs voice (${_voiceActor.value.voiceName})"
+                }
+            }
         )
     }
 
@@ -284,10 +304,33 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun auditionVoice(actor: VoiceActor, preset: EmotionalPreset) {
+        _statusMessage.value = "🎙️ ElevenLabs: Auditioning ${actor.voiceName}..."
         voiceoverManager.speak(
             text = preset.sampleQuote,
             voiceActor = actor,
-            emotionalPreset = preset
+            emotionalPreset = preset,
+            onSynthesisState = { isElevenLabs, isGenerating ->
+                _isVoiceSynthesizing.value = isGenerating
+                if (!isGenerating && isElevenLabs) {
+                    _statusMessage.value = "🎙️ ElevenLabs ${actor.voiceName} (${preset.label})"
+                }
+            }
+        )
+    }
+
+    fun speakSceneText(text: String, actor: VoiceActor, preset: EmotionalPreset) {
+        if (text.isBlank()) return
+        _statusMessage.value = "🎙️ ElevenLabs: Synthesizing scene voiceover..."
+        voiceoverManager.speak(
+            text = text,
+            voiceActor = actor,
+            emotionalPreset = preset,
+            onSynthesisState = { isElevenLabs, isGenerating ->
+                _isVoiceSynthesizing.value = isGenerating
+                if (!isGenerating && isElevenLabs) {
+                    _statusMessage.value = "🎙️ Playing scene voiceover (${actor.voiceName})"
+                }
+            }
         )
     }
 

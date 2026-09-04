@@ -97,6 +97,7 @@ fun CreativeDirectionScreen(
     val transitionStyle by viewModel.transitionStyle.collectAsState()
     val isGenerating by viewModel.isGenerating.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+    val isVoiceSynthesizing by viewModel.isVoiceSynthesizing.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize().immersiveGradientBackground()) {
         Scaffold(
@@ -428,14 +429,48 @@ fun CreativeDirectionScreen(
                                         letterSpacing = 1.5.sp,
                                         color = TextMuted
                                     )
-                                    Text(
-                                        text = "ElevenLabs AI Voice Actor",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "ElevenLabs AI Voice Actor",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        if (viewModel.isElevenLabsConfigured) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0x2E10B981))
+                                                    .border(1.dp, AccentEmerald.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(6.dp)
+                                                            .clip(CircleShape)
+                                                            .background(AccentEmerald)
+                                                    )
+                                                    Text("HD Neural Active", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = if (viewModel.isElevenLabsConfigured)
+                                    "Studio-grade neural speech generated via ElevenLabs with human inflection, emotion curves, and instant caching."
+                                else
+                                    "Powered by ElevenLabs neural engine. Add ELEVENLABS_API_KEY to AI Studio Secrets for studio-grade audio.",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
 
                             Spacer(modifier = Modifier.height(14.dp))
 
@@ -507,7 +542,7 @@ fun CreativeDirectionScreen(
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Audition", fontSize = 11.sp, color = TextPrimary)
+                                            Text(if (viewModel.isElevenLabsConfigured) "Audition HD" else "Audition", fontSize = 11.sp, color = TextPrimary)
                                         }
                                     }
                                 }

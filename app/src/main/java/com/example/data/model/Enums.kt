@@ -38,7 +38,8 @@ enum class VoiceActor(
     val bestFor: String,
     val isMale: Boolean,
     val basePitch: Float,
-    val baseRate: Float
+    val baseRate: Float,
+    val elevenLabsVoiceId: String
 ) {
     MATILDA(
         voiceName = "Matilda",
@@ -46,7 +47,8 @@ enum class VoiceActor(
         bestFor = "Default — versatile for any SaaS",
         isMale = false,
         basePitch = 1.1f,
-        baseRate = 1.05f
+        baseRate = 1.05f,
+        elevenLabsVoiceId = "XrExE9yKIg1WjnnlVkGX"
     ),
     RACHEL(
         voiceName = "Rachel",
@@ -54,7 +56,8 @@ enum class VoiceActor(
         bestFor = "Corporate, B2B & enterprise tools",
         isMale = false,
         basePitch = 1.0f,
-        baseRate = 0.98f
+        baseRate = 0.98f,
+        elevenLabsVoiceId = "21m00Tcm4TlvDq8ikWAM"
     ),
     DANIEL(
         voiceName = "Daniel",
@@ -62,7 +65,8 @@ enum class VoiceActor(
         bestFor = "Advertising & product launches",
         isMale = true,
         basePitch = 0.92f,
-        baseRate = 1.02f
+        baseRate = 1.02f,
+        elevenLabsVoiceId = "onwK4e9ZLuTAKqWW03F9"
     ),
     JOSH(
         voiceName = "Josh",
@@ -70,7 +74,8 @@ enum class VoiceActor(
         bestFor = "Consumer apps & indie dev tools",
         isMale = true,
         basePitch = 1.0f,
-        baseRate = 1.1f
+        baseRate = 1.1f,
+        elevenLabsVoiceId = "TxGEqnHWrfWFTfGW9XjX"
     ),
     ADAM(
         voiceName = "Adam",
@@ -78,7 +83,8 @@ enum class VoiceActor(
         bestFor = "Cinematic, intense hooks & punchy ads",
         isMale = true,
         basePitch = 0.82f,
-        baseRate = 0.95f
+        baseRate = 0.95f,
+        elevenLabsVoiceId = "pNInz6obpgDQGcFmaJgB"
     )
 }
 
@@ -87,42 +93,66 @@ enum class EmotionalPreset(
     val description: String,
     val sampleQuote: String,
     val pitchMultiplier: Float,
-    val rateMultiplier: Float
+    val rateMultiplier: Float,
+    val elevenLabsStability: Float = 0.50f,
+    val elevenLabsSimilarityBoost: Float = 0.80f,
+    val elevenLabsStyle: Float = 0.20f,
+    val elevenLabsSpeakerBoost: Boolean = true
 ) {
     RAGE(
         label = "Rage / Frustration",
         description = "Low stability, high urgency",
         sampleQuote = "\"Are you serious right now?! Why is this so hard?\"",
         pitchMultiplier = 1.25f,
-        rateMultiplier = 1.2f
+        rateMultiplier = 1.2f,
+        elevenLabsStability = 0.20f,
+        elevenLabsSimilarityBoost = 0.85f,
+        elevenLabsStyle = 0.55f,
+        elevenLabsSpeakerBoost = true
     ),
     WHISPER(
         label = "Whisper / Secret",
         description = "Intimate, low stability, confidential",
         sampleQuote = "\"What if you never had to guess again?\"",
         pitchMultiplier = 0.85f,
-        rateMultiplier = 0.88f
+        rateMultiplier = 0.88f,
+        elevenLabsStability = 0.35f,
+        elevenLabsSimilarityBoost = 0.80f,
+        elevenLabsStyle = 0.30f,
+        elevenLabsSpeakerBoost = true
     ),
     CONFIDENT(
         label = "Confident",
         description = "Mid stability, balanced, authoritative",
         sampleQuote = "\"Smart detection scans and builds in seconds.\"",
         pitchMultiplier = 1.0f,
-        rateMultiplier = 1.0f
+        rateMultiplier = 1.0f,
+        elevenLabsStability = 0.55f,
+        elevenLabsSimilarityBoost = 0.80f,
+        elevenLabsStyle = 0.15f,
+        elevenLabsSpeakerBoost = true
     ),
     WARM(
         label = "Warm",
         description = "High stability, smooth cadence",
         sampleQuote = "\"Join over 50,000 developers building faster.\"",
         pitchMultiplier = 1.05f,
-        rateMultiplier = 0.96f
+        rateMultiplier = 0.96f,
+        elevenLabsStability = 0.70f,
+        elevenLabsSimilarityBoost = 0.82f,
+        elevenLabsStyle = 0.10f,
+        elevenLabsSpeakerBoost = true
     ),
     DRAMATIC(
         label = "Dramatic",
         description = "High style, punchy & resonant",
         sampleQuote = "\"Try it right now. Ship in seconds.\"",
         pitchMultiplier = 0.88f,
-        rateMultiplier = 0.92f
+        rateMultiplier = 0.92f,
+        elevenLabsStability = 0.28f,
+        elevenLabsSimilarityBoost = 0.88f,
+        elevenLabsStyle = 0.50f,
+        elevenLabsSpeakerBoost = true
     )
 }
 

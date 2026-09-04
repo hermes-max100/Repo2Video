@@ -39,6 +39,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -106,6 +107,7 @@ fun StudioEditorScreen(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val voiceActor by viewModel.voiceActor.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+    val isVoiceSynthesizing by viewModel.isVoiceSynthesizing.collectAsState()
 
     val currentScene = scenes.getOrNull(activeSceneIndex)
 
@@ -550,27 +552,68 @@ fun StudioEditorScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Voiceover Narration Script", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text("Voiceover Narration Script", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                        if (viewModel.isElevenLabsConfigured) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color(0x2610B981))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(6.dp)
+                                                            .clip(CircleShape)
+                                                            .background(AccentEmerald)
+                                                    )
+                                                    Text("ElevenLabs HD", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
+                                                }
+                                            }
+                                        }
+                                    }
 
-                                    // Audition Narration Button
+                                    // Audition Narration Button (Plays actual scene voiceover or quote)
                                     Button(
                                         onClick = {
-                                            viewModel.auditionVoice(voiceActor, currentScene.emotionalPreset)
+                                            if (currentScene.voiceover.isNotBlank()) {
+                                                viewModel.speakSceneText(currentScene.voiceover, voiceActor, currentScene.emotionalPreset)
+                                            } else {
+                                                viewModel.auditionVoice(voiceActor, currentScene.emotionalPreset)
+                                            }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0x1AFFFFFF)),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isVoiceSynthesizing) AccentEmerald else GlassBorder),
                                         shape = RoundedCornerShape(12.dp),
                                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                         modifier = Modifier.testTag("audition_narration_button")
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                                            contentDescription = null,
-                                            tint = AccentAmber,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Audition", fontSize = 11.sp, color = TextPrimary)
+                                        if (isVoiceSynthesizing) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(12.dp),
+                                                strokeWidth = 2.dp,
+                                                color = AccentEmerald
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Synthesizing...", fontSize = 11.sp, color = AccentEmerald)
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                                contentDescription = null,
+                                                tint = if (viewModel.isElevenLabsConfigured) AccentEmerald else AccentAmber,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                if (viewModel.isElevenLabsConfigured) "Audition HD" else "Audition",
+                                                fontSize = 11.sp,
+                                                color = TextPrimary
+                                            )
+                                        }
                                     }
                                 }
 
