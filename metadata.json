@@ -1,0 +1,6 @@
+{
+  "name": "PromoVideo",
+  "description": "Turn any codebase into high-impact landscape and portrait promo videos with AI voiceover, animated browser mockups, and narrative hooks.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

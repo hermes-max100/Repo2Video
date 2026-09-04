@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Outer Rounded Video Card Frame (Safe Zone: 26 to 82) -->
+    <path
+        android:pathData="M34,28 h40 c4.4,0 8,3.6 8,8 v36 c0,4.4 -3.6,8 -8,8 h-40 c-4.4,0 -8,-3.6 -8,-8 v-36 c0,-4.4 3.6,-8 8,-8 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="26"
+                android:startY="28"
+                android:endX="82"
+                android:endY="80"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#4F46E5" />
+                <item android:offset="1.0" android:color="#9333EA" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Inner Video Viewport Screen -->
+    <path
+        android:pathData="M33,33 h42 c2.2,0 4,1.8 4,4 v26 c0,2.2 -1.8,4 -4,4 h-42 c-2.2,0 -4,-1.8 -4,-4 v-26 c0,-2.2 1.8,-4 4,-4 z"
+        android:fillColor="#090D16" />
+
+    <!-- Left Code Bracket '<' -->
+    <path
+        android:pathData="M42,43 L36,50 L42,57"
+        android:strokeWidth="2.5"
+        android:strokeColor="#38BDF8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Right Code Bracket '>' -->
+    <path
+        android:pathData="M66,43 L72,50 L66,57"
+        android:strokeWidth="2.5"
+        android:strokeColor="#A855F7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Center Play Arrow with Golden Gradient -->
+    <path
+        android:pathData="M49,43.5 L61,50 L49,56.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="49"
+                android:startY="43.5"
+                android:endX="61"
+                android:endY="56.5"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#F59E0B" />
+                <item android:offset="1.0" android:color="#EF4444" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Top Film Reel notches / indicator dots -->
+    <path
+        android:pathData="M36,31 h4 v2 h-4 z M46,31 h4 v2 h-4 z M56,31 h4 v2 h-4 z M66,31 h4 v2 h-4 z"
+        android:fillColor="#818CF8" />
+
+    <!-- Bottom Timeline Bar & Accent Pill -->
+    <path
+        android:pathData="M36,63 h36"
+        android:strokeWidth="1.8"
+        android:strokeColor="#312E81"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M36,63 h18"
+        android:strokeWidth="1.8"
+        android:strokeColor="#EC4899"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M54,63 m-2,0 a2,2 0 1,1 4,0 a2,2 0 1,1 -4,0"
+        android:fillColor="#F43F5E" />
+
+</vector>
