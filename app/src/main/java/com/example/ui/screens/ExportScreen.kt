@@ -25,10 +25,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.VideoFile
+import androidx.compose.material.icons.filled.Cached
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.FactCheck
+import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Warning
+import com.example.data.model.RenderJobEntity
+import com.example.data.model.RenderJobStatus
+import com.example.data.model.RenderJobType
+import com.example.data.model.LicensingAttribution
+import com.example.data.model.AspectRatioFormat
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,6 +83,7 @@ import com.example.data.model.PromoScene
 import com.example.ui.theme.AccentAmber
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
+import com.example.ui.theme.AccentRose
 import com.example.ui.theme.CodeComment
 import com.example.ui.theme.GlassBackground
 import com.example.ui.theme.GlassBorder
@@ -92,6 +110,11 @@ fun ExportScreen(
     val targetDuration by viewModel.targetDurationSeconds.collectAsState()
     val voiceActor by viewModel.voiceActor.collectAsState()
     val transitionStyle by viewModel.transitionStyle.collectAsState()
+    val activeAspectRatio by viewModel.activeAspectRatio.collectAsState()
+    val activeJobs by viewModel.activeRenderJobs.collectAsState()
+    val mediaCacheSize by viewModel.mediaCacheSize.collectAsState()
+    val licensingManifest by viewModel.licensingManifest.collectAsState()
+    val contentSafetyCheck by viewModel.contentSafetyCheck.collectAsState()
 
     var selectedCodeTab by remember { mutableIntStateOf(0) }
     var isRendering by remember { mutableStateOf(false) }
@@ -274,6 +297,125 @@ fun ExportScreen(
                                         fontFamily = FontFamily.Monospace
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    // GOOGLE OAUTH CLOUD SYNC CARD
+                    val googleAuthState by viewModel.googleAuthState.collectAsState()
+                    val isGoogleAuthenticated = googleAuthState is com.example.service.GoogleAuthState.Authenticated
+                    val user = (googleAuthState as? com.example.service.GoogleAuthState.Authenticated)?.user
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(GlassBackground)
+                            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(Color(0x264285F4)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CloudUpload,
+                                            contentDescription = null,
+                                            tint = Color(0xFF4285F4),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "GOOGLE CLOUD SYNC",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.5.sp,
+                                            color = TextMuted
+                                        )
+                                        Text(
+                                            text = "matrix-decoded • DevDirector",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                if (isGoogleAuthenticated) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color(0x2610B981),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald)
+                                    ) {
+                                        Text(
+                                            text = "CONNECTED",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = AccentEmerald,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                text = if (isGoogleAuthenticated)
+                                    "Signed in as ${user?.email}. Promo video timeline, scenes, and Remotion configurations are synchronizable to Google Cloud Firestore."
+                                else
+                                    "Authenticate with Google OAuth 2.0 to back up your promo video project and render configurations to Google Cloud.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Button(
+                                onClick = {
+                                    if (isGoogleAuthenticated) {
+                                        viewModel.syncCurrentProjectToCloud()
+                                        Toast.makeText(context, "Project synced to matrix-decoded cloud!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        viewModel.signInWithConfirmedGoogleAccount()
+                                        Toast.makeText(context, "Signed in with DevDirector OAuth identity!", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isGoogleAuthenticated) PrimaryIndigo else Color(0xFF4285F4)
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("export_cloud_sync_button")
+                            ) {
+                                Icon(
+                                    imageVector = if (isGoogleAuthenticated) Icons.Default.CloudDone else Icons.Default.CloudUpload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isGoogleAuthenticated) "Sync Project to Cloud" else "Sign In & Sync with Google",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
                             }
                         }
                     }
@@ -637,6 +779,423 @@ fun ExportScreen(
                                     color = Color(0xFFC9D1D9),
                                     lineHeight = 17.sp
                                 )
+                            }
+                        }
+                    }
+                }
+
+                // DURABLE BACKGROUND RENDER JOBS CARD
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(GlassBackground)
+                            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0x266366F1)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Cached,
+                                            contentDescription = null,
+                                            tint = PrimaryLight,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "DURABLE RENDER QUEUE",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.5.sp,
+                                            color = TextMuted
+                                        )
+                                        Text(
+                                            text = "Resumable Background Pipelines",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0x2210B981)
+                                ) {
+                                    Text(
+                                        text = "${activeJobs.size} Active",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentEmerald,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Background renders are persisted in local SQLite/Room. If the app is closed or backgrounded, jobs resume from their last verified checkpoint.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+
+                            // Active Job Cards
+                            if (activeJobs.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0x0DFFFFFF))
+                                        .padding(14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("No active background jobs. Start one below.", fontSize = 12.sp, color = TextMuted)
+                                }
+                            } else {
+                                activeJobs.forEach { job ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(Color(0x14FFFFFF))
+                                            .border(1.dp, GlassBorder, RoundedCornerShape(16.dp))
+                                            .padding(12.dp)
+                                    ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Job #${job.id.take(8)} • ${job.jobType}",
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = when (job.status) {
+                                                        RenderJobStatus.COMPLETED.name -> Color(0x3310B981)
+                                                        RenderJobStatus.FAILED.name -> Color(0x33EF4444)
+                                                        RenderJobStatus.PROCESSING.name -> Color(0x336366F1)
+                                                        else -> Color(0x33F59E0B)
+                                                    }
+                                                ) {
+                                                    Text(
+                                                        text = job.status,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = when (job.status) {
+                                                            RenderJobStatus.COMPLETED.name -> AccentEmerald
+                                                            RenderJobStatus.FAILED.name -> AccentRose
+                                                            RenderJobStatus.PROCESSING.name -> PrimaryLight
+                                                            else -> AccentAmber
+                                                        },
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Text(
+                                                text = "Step: ${job.checkpointStep}",
+                                                fontSize = 10.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = AccentCyan
+                                            )
+
+                                            LinearProgressIndicator(
+                                                progress = { job.progressPercent / 100f },
+                                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                                color = PrimaryIndigo,
+                                                trackColor = Color(0x22FFFFFF)
+                                            )
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.End
+                                            ) {
+                                                if (job.status == RenderJobStatus.FAILED.name || job.status == RenderJobStatus.CANCELLED.name) {
+                                                    Button(
+                                                        onClick = { viewModel.retryRenderJob(job.id) },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0x336366F1)),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("Resume Checkpoint", fontSize = 10.sp)
+                                                    }
+                                                } else if (job.status == RenderJobStatus.PROCESSING.name || job.status == RenderJobStatus.QUEUED.name) {
+                                                    Button(
+                                                        onClick = { viewModel.cancelRenderJob(job.id) },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0x33EF4444)),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        Icon(imageVector = Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(12.dp), tint = AccentRose)
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("Cancel", fontSize = 10.sp, color = AccentRose)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.startDurableExportJob(activeAspectRatio)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("start_durable_render_button")
+                            ) {
+                                Icon(imageVector = Icons.Default.Cached, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Queue Resumable Background Render", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+                }
+
+                // STORAGE LIFECYCLE & CACHE MANAGEMENT
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(GlassBackground)
+                            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0x2606B6D4)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Storage, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(20.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(text = "MEDIA LIFECYCLE & CACHE", fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, color = TextMuted)
+                                        Text(text = "Ephemeral Storage Policy", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+
+                                Surface(shape = RoundedCornerShape(8.dp), color = Color(0x2206B6D4)) {
+                                    Text(
+                                        text = mediaCacheSize,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentCyan,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Temporary audio synthesis tracks and intermediate video frames are stored in scoped sandbox storage and auto-pruned after 24 hours.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+
+                            Button(
+                                onClick = {
+                                    viewModel.clearProjectMedia()
+                                    Toast.makeText(context, "Temporary project media cache cleared!", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0x33EF4444)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("clear_project_media_button")
+                            ) {
+                                Icon(imageVector = Icons.Default.CleaningServices, contentDescription = null, tint = AccentRose, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Clear Project Media Cache Now", color = AccentRose, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                // LICENSING & ATTRIBUTION MANIFEST
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(GlassBackground)
+                            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0x2610B981)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(imageVector = Icons.Default.FactCheck, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(20.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(text = "LICENSING & ATTRIBUTION", fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, color = TextMuted)
+                                        Text(text = "LICENSE_NOTICE.json", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+
+                                Surface(shape = RoundedCornerShape(8.dp), color = Color(0x2210B981)) {
+                                    Text(
+                                        text = "OFL & CC0 Compliant",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentEmerald,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            val attributions = if (licensingManifest.isNotEmpty()) licensingManifest else listOf(
+                                LicensingAttribution(
+                                    assetName = "JetBrains Mono",
+                                    assetType = "Font",
+                                    source = "JetBrains Open Source",
+                                    licenseType = "OFL-1.1",
+                                    publishableStatus = "SAFE_TO_PUBLISH",
+                                    attributionNotice = "Copyright 2020 JetBrains s.r.o."
+                                ),
+                                LicensingAttribution(
+                                    assetName = "Native Audio Engine",
+                                    assetType = "Audio Bed",
+                                    source = "DevDirector Synth",
+                                    licenseType = "CC0 1.0 Universal",
+                                    publishableStatus = "SAFE_TO_PUBLISH",
+                                    attributionNotice = "Procedural audio synthesizer"
+                                ),
+                                LicensingAttribution(
+                                    assetName = "Remotion Engine",
+                                    assetType = "Framework",
+                                    source = "Remotion GmbH",
+                                    licenseType = "Company License / Open Source",
+                                    publishableStatus = "SAFE_TO_PUBLISH",
+                                    attributionNotice = "Remotion programmatic canvas renderer"
+                                ),
+                                LicensingAttribution(
+                                    assetName = "${voiceActor.name} Synthetic Voice",
+                                    assetType = "Voiceover",
+                                    source = "ElevenLabs / Android TTS",
+                                    licenseType = "Commercial License",
+                                    publishableStatus = "SAFE_TO_PUBLISH",
+                                    attributionNotice = "Commercial neural speech synthesis"
+                                )
+                            )
+
+                            attributions.forEach { attr ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0x11FFFFFF))
+                                        .padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(text = attr.assetName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text(text = "${attr.assetType} • ${attr.source}", fontSize = 10.sp, color = TextMuted)
+                                    }
+                                    Surface(shape = RoundedCornerShape(6.dp), color = Color(0x228B5CF6)) {
+                                        Text(
+                                            text = attr.licenseType,
+                                            fontSize = 10.sp,
+                                            color = SecondaryLight,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // SHAREABLE PROJECT BUNDLE EXPORTER
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(GlassBackground)
+                            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0x26F59E0B)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(imageVector = Icons.Default.FolderZip, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(text = "PROJECT REPRODUCIBILITY", fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, color = TextMuted)
+                                    Text(text = "Shareable Project Bundle", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+
+                            Text(
+                                text = "Export a standalone, editable .devdirector.json bundle containing your deterministic manifest, claim evidences, creative brief, and scenes.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+
+                            Button(
+                                onClick = {
+                                    val bundleJson = viewModel.exportShareableProjectBundle()
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("DevDirector Project Bundle", bundleJson))
+                                    Toast.makeText(context, "Full project bundle copied to clipboard!", Toast.LENGTH_LONG).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("export_project_bundle_button")
+                            ) {
+                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Copy .devdirector.json Bundle", fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     }

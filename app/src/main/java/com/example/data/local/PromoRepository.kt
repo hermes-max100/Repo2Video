@@ -37,6 +37,47 @@ class PromoRepository(private val promoDao: PromoDao) {
         promoDao.deleteProjectById(id)
     }
 
+    suspend fun updateProjectSyncState(
+        projectId: Long,
+        syncState: com.example.data.model.SyncState,
+        conflictOutcome: String? = null
+    ) {
+        val project = promoDao.getProjectById(projectId) ?: return
+        val updated = project.copy(
+            syncState = syncState.name,
+            lastSyncAttemptAt = System.currentTimeMillis(),
+            syncConflictOutcome = conflictOutcome,
+            syncRetryCount = if (syncState == com.example.data.model.SyncState.FAILED) project.syncRetryCount + 1 else project.syncRetryCount,
+            updatedAt = System.currentTimeMillis()
+        )
+        promoDao.updateProject(updated)
+    }
+
+    suspend fun updateProjectManifestAndBrief(
+        projectId: Long,
+        manifestJson: String,
+        briefJson: String,
+        claimsJson: String
+    ) {
+        val project = promoDao.getProjectById(projectId) ?: return
+        val updated = project.copy(
+            scanManifestJson = manifestJson,
+            creativeBriefJson = briefJson,
+            claimEvidencesJson = claimsJson,
+            updatedAt = System.currentTimeMillis()
+        )
+        promoDao.updateProject(updated)
+    }
+
+    suspend fun markRawSourceDeleted(projectId: Long) {
+        val project = promoDao.getProjectById(projectId) ?: return
+        val updated = project.copy(
+            rawSourceDeleted = true,
+            updatedAt = System.currentTimeMillis()
+        )
+        promoDao.updateProject(updated)
+    }
+
     suspend fun seedDefaultsIfEmpty() {
         if (promoDao.getProjectCount() == 0) {
             val sampleProjects = getSampleProjects()

@@ -105,10 +105,17 @@ fun HomeScreen(
     onNavigateToScanner: () -> Unit,
     onNavigateToStudio: () -> Unit,
     onNavigateToExport: () -> Unit,
-    onOpenDirectorChat: () -> Unit
+    onOpenDirectorChat: () -> Unit,
+    onOpenGrokOAuth: () -> Unit = {},
+    onOpenGoogleOAuth: () -> Unit = {}
 ) {
     val projects by viewModel.projects.collectAsState()
     val currentProject by viewModel.currentProject.collectAsState()
+    val xaiAuthState by viewModel.xaiAuthState.collectAsState()
+    val isGrokConnected = xaiAuthState is com.example.service.XAiAuthState.Connected
+    val googleAuthState by viewModel.googleAuthState.collectAsState()
+    val isGoogleConnected = googleAuthState is com.example.service.GoogleAuthState.Authenticated
+    val googleUser = (googleAuthState as? com.example.service.GoogleAuthState.Authenticated)?.user
 
     // Pulsing indicator animation for "Claude Code Active"
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
@@ -184,6 +191,97 @@ fun HomeScreen(
                         }
                     },
                     actions = {
+                        // Google OAuth Sign-In / Account Button
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isGoogleConnected) Color(0x264285F4) else GlassBackground,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isGoogleConnected) Color(0xFF4285F4) else GlassBorder
+                            ),
+                            modifier = Modifier
+                                .clickable { onOpenGoogleOAuth() }
+                                .testTag("home_google_oauth_button")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                if (isGoogleConnected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF4285F4)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = (googleUser?.displayName ?: "C").take(1).uppercase(),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                    Text(
+                                        text = googleUser?.displayName?.split(" ")?.firstOrNull() ?: "Google",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "Sign in",
+                                        tint = TextSecondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Sign In",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextSecondary
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // SuperGrok OAuth Button
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isGrokConnected) Color(0x2610B981) else GlassBackground,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isGrokConnected) AccentEmerald else GlassBorder
+                            ),
+                            modifier = Modifier
+                                .clickable { onOpenGrokOAuth() }
+                                .testTag("home_grok_oauth_button")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = "SuperGrok",
+                                    tint = if (isGrokConnected) AccentEmerald else TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = if (isGrokConnected) "SuperGrok" else "Connect Grok",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isGrokConnected) AccentEmerald else TextSecondary
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         // Terminal / AI Director Action Button (w-11 h-11 rounded-full bg-white/5 border border-white/10)
                         Box(
                             modifier = Modifier
@@ -274,11 +372,11 @@ fun HomeScreen(
                                 modifier = Modifier.size(22.dp)
                             )
                         }
-                        IconButton(onClick = onNavigateToExport) {
+                        IconButton(onClick = onOpenGoogleOAuth) {
                             Icon(
                                 imageVector = Icons.Default.Person,
-                                contentDescription = "Settings",
-                                tint = TextMuted,
+                                contentDescription = "Profile & OAuth Account",
+                                tint = if (isGoogleConnected) Color(0xFF4285F4) else TextMuted,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -318,7 +416,12 @@ fun HomeScreen(
 
                 item {
                     // Preflight Environment Status Card
-                    PreflightStatusCard()
+                    PreflightStatusCard(
+                        isGrokConnected = isGrokConnected,
+                        onOpenGrokOAuth = onOpenGrokOAuth,
+                        isGoogleConnected = isGoogleConnected,
+                        onOpenGoogleOAuth = onOpenGoogleOAuth
+                    )
                 }
 
                 item {
@@ -809,7 +912,12 @@ private fun RenderPreviewCard(onOpenStudio: () -> Unit) {
 }
 
 @Composable
-private fun PreflightStatusCard() {
+private fun PreflightStatusCard(
+    isGrokConnected: Boolean,
+    onOpenGrokOAuth: () -> Unit,
+    isGoogleConnected: Boolean,
+    onOpenGoogleOAuth: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -832,7 +940,7 @@ private fun PreflightStatusCard() {
                     color = TextMuted
                 )
                 Text(
-                    text = "ALL SYSTEMS NOMINAL",
+                    text = if (isGoogleConnected && isGrokConnected) "OAUTH ACTIVE" else if (isGoogleConnected) "GOOGLE AUTH OK" else "ALL SYSTEMS NOMINAL",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = AccentEmerald
@@ -845,10 +953,14 @@ private fun PreflightStatusCard() {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                Box(modifier = Modifier.clickable { onOpenGoogleOAuth() }) {
+                    PreflightCheckItem("Google OAuth", if (isGoogleConnected) "matrix-decoded" else "Sign In", isGoogleConnected)
+                }
+                Box(modifier = Modifier.clickable { onOpenGrokOAuth() }) {
+                    PreflightCheckItem("SuperGrok", if (isGrokConnected) "OAuth OK" else "Connect", isGrokConnected)
+                }
                 PreflightCheckItem("Claude Code", "v1.2", true)
-                PreflightCheckItem("Remotion", "v4.0", true)
-                PreflightCheckItem("Voiceover", "5 Presets", true)
-                PreflightCheckItem("Veo 3", "Ready", true)
+                PreflightCheckItem("Voiceover", "ElevenLabs", true)
             }
         }
     }

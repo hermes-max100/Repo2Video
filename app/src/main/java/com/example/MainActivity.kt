@@ -18,6 +18,8 @@ import androidx.navigation.compose.rememberNavController
 import com.example.ui.screens.CreativeDirectionScreen
 import com.example.ui.screens.DirectorChatDialog
 import com.example.ui.screens.ExportScreen
+import com.example.ui.screens.GoogleOAuthDialog
+import com.example.ui.screens.GrokOAuthDialog
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ScannerScreen
 import com.example.ui.screens.StudioEditorScreen
@@ -50,6 +52,8 @@ class MainActivity : ComponentActivity() {
 fun PromoVideoApp(viewModel: PromoViewModel) {
     val navController = rememberNavController()
     var showDirectorChat by remember { mutableStateOf(false) }
+    var showGrokOAuthDialog by remember { mutableStateOf(false) }
+    var showGoogleOAuthDialog by remember { mutableStateOf(false) }
 
     NavHost(
         navController = navController,
@@ -62,7 +66,9 @@ fun PromoVideoApp(viewModel: PromoViewModel) {
                 onNavigateToScanner = { navController.navigate(ROUTE_SCANNER) },
                 onNavigateToStudio = { navController.navigate(ROUTE_STUDIO) },
                 onNavigateToExport = { navController.navigate(ROUTE_EXPORT) },
-                onOpenDirectorChat = { showDirectorChat = true }
+                onOpenDirectorChat = { showDirectorChat = true },
+                onOpenGrokOAuth = { showGrokOAuthDialog = true },
+                onOpenGoogleOAuth = { showGoogleOAuthDialog = true }
             )
         }
 
@@ -78,7 +84,8 @@ fun PromoVideoApp(viewModel: PromoViewModel) {
             CreativeDirectionScreen(
                 viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToStudio = { navController.navigate(ROUTE_STUDIO) }
+                onNavigateToStudio = { navController.navigate(ROUTE_STUDIO) },
+                onOpenGrokOAuth = { showGrokOAuthDialog = true }
             )
         }
 
@@ -102,7 +109,22 @@ fun PromoVideoApp(viewModel: PromoViewModel) {
     if (showDirectorChat) {
         DirectorChatDialog(
             viewModel = viewModel,
-            onDismiss = { showDirectorChat = false }
+            onDismiss = { showDirectorChat = false },
+            onOpenGrokOAuth = { showGrokOAuthDialog = true }
+        )
+    }
+
+    if (showGrokOAuthDialog) {
+        GrokOAuthDialog(
+            viewModel = viewModel,
+            onDismiss = { showGrokOAuthDialog = false }
+        )
+    }
+
+    if (showGoogleOAuthDialog) {
+        GoogleOAuthDialog(
+            viewModel = viewModel,
+            onDismiss = { showGoogleOAuthDialog = false }
         )
     }
 }

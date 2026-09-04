@@ -228,3 +228,23 @@ enum class SceneVisualType(
     LOGO_REVEAL_CTA("Logo Reveal & CTA", "Radial starburst particle glow, logo scale spring, CTA button"),
     VEO_AI_VIDEO("Veo AI Clip", "Cinematic AI-generated background video animation")
 }
+
+enum class AiEngine(
+    val title: String,
+    val modelName: String,
+    val badgeLabel: String,
+    val description: String
+) {
+    GEMINI(
+        title = "Google Gemini",
+        modelName = "Gemini 2.5 Flash",
+        badgeLabel = "Gemini AI",
+        description = "Multimodal reasoning & structured storyboards"
+    ),
+    GROK(
+        title = "xAI Grok",
+        modelName = "Grok 2 (SuperGrok)",
+        badgeLabel = "SuperGrok",
+        description = "High-energy, witty developer hooks via OAuth"
+    )
+}

@@ -58,13 +58,21 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.PromoViewModel
 
+import androidx.compose.material.icons.filled.Bolt
+import com.example.data.model.AiEngine
+import com.example.service.XAiAuthState
+import com.example.ui.theme.AccentEmerald
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DirectorChatDialog(
     viewModel: PromoViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenGrokOAuth: (() -> Unit)? = null
 ) {
     val chatHistory by viewModel.directorChatHistory.collectAsState()
+    val aiEngine by viewModel.aiEngine.collectAsState()
+    val authState by viewModel.xaiAuthState.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -73,7 +81,8 @@ fun DirectorChatDialog(
         "Switch voice actor to Adam",
         "Tune for 30s TikTok cut",
         "Test metallic swoosh transition",
-        "Make closing CTA punchier"
+        "Make closing CTA punchier",
+        "Grok: Roast my script and make it sharper"
     )
 
     ModalBottomSheet(
@@ -137,6 +146,74 @@ fun DirectorChatDialog(
             }
 
             Spacer(modifier = Modifier.height(14.dp))
+
+            // AI Model / Engine Selector Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF13141B))
+                    .border(1.dp, GlassBorder, RoundedCornerShape(14.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Gemini Engine Option
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (aiEngine == AiEngine.GEMINI) PrimaryIndigo else Color.Transparent)
+                        .clickable { viewModel.setAiEngine(AiEngine.GEMINI) }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                        Text(
+                            text = "Gemini 2.5",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                // SuperGrok Engine Option
+                val isGrokConnected = authState is XAiAuthState.Connected
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (aiEngine == AiEngine.GROK) AccentEmerald else Color.Transparent)
+                        .clickable {
+                            if (isGrokConnected) {
+                                viewModel.setAiEngine(AiEngine.GROK)
+                            } else {
+                                onOpenGrokOAuth?.invoke()
+                            }
+                        }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            tint = if (aiEngine == AiEngine.GROK) Color.Black else AccentEmerald,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = if (isGrokConnected) "SuperGrok 2" else "Connect Grok (OAuth)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (aiEngine == AiEngine.GROK) Color.Black else AccentEmerald
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Quick Prompt Suggestions
             FlowRow(

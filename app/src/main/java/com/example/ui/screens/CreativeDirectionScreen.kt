@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
@@ -30,6 +31,12 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.FactCheck
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Psychology
+import com.example.domain.manager.VoiceEngineType
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -57,11 +64,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.AiEngine
 import com.example.data.model.EmotionalPreset
 import com.example.data.model.MusicTrackOption
 import com.example.data.model.NarrativeTemplate
 import com.example.data.model.TransitionStyle
 import com.example.data.model.VoiceActor
+import com.example.service.XAiAuthState
 import com.example.ui.theme.AccentAmber
 import com.example.ui.theme.AccentCyan
 import com.example.ui.theme.AccentEmerald
@@ -87,7 +96,8 @@ import com.example.ui.viewmodel.PromoViewModel
 fun CreativeDirectionScreen(
     viewModel: PromoViewModel,
     onNavigateBack: () -> Unit,
-    onNavigateToStudio: () -> Unit
+    onNavigateToStudio: () -> Unit,
+    onOpenGrokOAuth: (() -> Unit)? = null
 ) {
     val brandProfile by viewModel.brandProfile.collectAsState()
     val narrativeTemplate by viewModel.narrativeTemplate.collectAsState()
@@ -98,6 +108,12 @@ fun CreativeDirectionScreen(
     val isGenerating by viewModel.isGenerating.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val isVoiceSynthesizing by viewModel.isVoiceSynthesizing.collectAsState()
+    val aiEngine by viewModel.aiEngine.collectAsState()
+    val authState by viewModel.xaiAuthState.collectAsState()
+    val isGrokConnected = authState is XAiAuthState.Connected
+    val voiceCapability by viewModel.voiceCapability.collectAsState()
+    val creativeBrief by viewModel.creativeBrief.collectAsState()
+    val scanManifest by viewModel.scanManifest.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize().immersiveGradientBackground()) {
         Scaffold(
@@ -202,6 +218,322 @@ fun CreativeDirectionScreen(
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
 
+                    // 0. AI Engine & SuperGrok OAuth Card
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(GlassBackground)
+                            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (aiEngine == AiEngine.GROK) Color(0x3310B981) else Color(0x336366F1)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (aiEngine == AiEngine.GROK) Icons.Default.Bolt else Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = if (aiEngine == AiEngine.GROK) AccentEmerald else PrimaryLight,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "AI Scripting Engine",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = if (aiEngine == AiEngine.GROK) "xAI Grok 2 • SuperGrok Account" else "Google Gemini 2.5 Flash",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (aiEngine == AiEngine.GROK) AccentEmerald else TextSecondary
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isGrokConnected) Color(0x2610B981) else Color(0x1AFFFFFF),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isGrokConnected) AccentEmerald else GlassBorder
+                                    ),
+                                    modifier = Modifier.clickable { onOpenGrokOAuth?.invoke() }
+                                ) {
+                                    Text(
+                                        text = if (isGrokConnected) "SuperGrok OK" else "Connect OAuth",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isGrokConnected) AccentEmerald else PrimaryLight,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Engine selector row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                // Google Gemini option
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { viewModel.setAiEngine(AiEngine.GEMINI) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (aiEngine == AiEngine.GEMINI) Color(0x336366F1) else Color(0x0AFFFFFF),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (aiEngine == AiEngine.GEMINI) PrimaryLight else GlassBorder
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = "Google Gemini",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = Color.White
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Gemini 2.5 Multimodal",
+                                            fontSize = 10.sp,
+                                            color = TextMuted
+                                        )
+                                    }
+                                }
+
+                                // xAI Grok option
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            if (isGrokConnected) {
+                                                viewModel.setAiEngine(AiEngine.GROK)
+                                            } else {
+                                                onOpenGrokOAuth?.invoke()
+                                            }
+                                        },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (aiEngine == AiEngine.GROK) Color(0x3310B981) else Color(0x0AFFFFFF),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (aiEngine == AiEngine.GROK) AccentEmerald else GlassBorder
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(
+                                                text = "xAI Grok 2",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                color = Color.White
+                                            )
+                                            if (isGrokConnected) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(AccentEmerald)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = if (isGrokConnected) "SuperGrok Active" else "Tap to Connect",
+                                            fontSize = 10.sp,
+                                            color = if (isGrokConnected) AccentEmerald else PrimaryLight
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // STRUCTURED CREATIVE BRIEF & HARD BUDGET CARD
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(GlassBackground)
+                            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0x268B5CF6)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Psychology,
+                                            contentDescription = null,
+                                            tint = PrimaryLight,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "CREATIVE BRIEF & BUDGETS",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.5.sp,
+                                            color = TextMuted
+                                        )
+                                        Text(
+                                            text = "Structured Strategic Foundation",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0x228B5CF6)
+                                ) {
+                                    Text(
+                                        text = "Deterministic",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SecondaryLight,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Engineered from sanitized repository facts to prevent hallucinated marketing claims.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+
+                            // Brief breakdown items
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0x0DFFFFFF))
+                                        .padding(12.dp)
+                                 ) {
+                                    Column {
+                                        Text("TARGET AUDIENCE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = TextMuted, letterSpacing = 1.sp)
+                                        Text(creativeBrief?.targetAudience ?: brandProfile.targetAudience.ifEmpty { "Software Engineers & Builders" }, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0x0DFFFFFF))
+                                        .padding(12.dp)
+                                ) {
+                                    Column {
+                                        Text("CORE PROMISE & VALUE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = TextMuted, letterSpacing = 1.sp)
+                                        Text(creativeBrief?.coreBenefit ?: brandProfile.description.ifEmpty { "Turn repository code into high-converting developer video" }, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0x0DFFFFFF))
+                                            .padding(10.dp)
+                                    ) {
+                                        Column {
+                                            Text("TONE KEYWORDS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = TextMuted, letterSpacing = 1.sp)
+                                            Text(
+                                                "Modern • Punchy • Fast",
+                                                fontSize = 11.sp,
+                                                color = AccentCyan
+                                            )
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0x0DFFFFFF))
+                                            .padding(10.dp)
+                                    ) {
+                                        Column {
+                                            Text("CALL TO ACTION", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = TextMuted, letterSpacing = 1.sp)
+                                            Text(
+                                                creativeBrief?.callToAction ?: "Star on GitHub",
+                                                fontSize = 11.sp,
+                                                color = AccentEmerald,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Hard Budget Envelope
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0x1A10B981))
+                                    .border(1.dp, Color(0x3310B981), RoundedCornerShape(14.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(imageVector = Icons.Default.Shield, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("ENFORCED PRODUCTION BUDGETS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AccentEmerald, letterSpacing = 1.sp)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Duration Limit: ${targetDuration}s", fontSize = 11.sp, color = TextSecondary)
+                                        Text("Word Budget: ~${(targetDuration * 2.3).toInt()} words", fontSize = 11.sp, color = TextSecondary)
+                                        Text("Tokens: < 2,000", fontSize = 11.sp, color = TextSecondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
                     // 1. Narrative Template Glass Card
                     Box(
                         modifier = Modifier
@@ -429,33 +761,43 @@ fun CreativeDirectionScreen(
                                         letterSpacing = 1.5.sp,
                                         color = TextMuted
                                     )
+                                    val isEleven = voiceCapability.activeEngine == VoiceEngineType.ELEVENLABS_NEURAL && !voiceCapability.isFallback
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Text(
-                                            text = "ElevenLabs AI Voice Actor",
+                                            text = if (isEleven) "ElevenLabs AI Voice Actor" else "Local Android Speech Engine",
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White
                                         )
-                                        if (viewModel.isElevenLabsConfigured) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(Color(0x2E10B981))
-                                                    .border(1.dp, AccentEmerald.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(6.dp)
-                                                            .clip(CircleShape)
-                                                            .background(AccentEmerald)
-                                                    )
-                                                    Text("HD Neural Active", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
-                                                }
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(
+                                                    if (isEleven) Color(0x2E10B981) else Color(0x2EF59E0B)
+                                                )
+                                                .border(
+                                                    1.dp,
+                                                    if (isEleven) AccentEmerald.copy(alpha = 0.5f) else AccentAmber.copy(alpha = 0.5f),
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (isEleven) AccentEmerald else AccentAmber)
+                                                )
+                                                Text(
+                                                    text = if (isEleven) "HD Neural Active" else "Local Android TTS",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isEleven) AccentEmerald else AccentAmber
+                                                )
                                             }
                                         }
                                     }
@@ -464,10 +806,7 @@ fun CreativeDirectionScreen(
 
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = if (viewModel.isElevenLabsConfigured)
-                                    "Studio-grade neural speech generated via ElevenLabs with human inflection, emotion curves, and instant caching."
-                                else
-                                    "Powered by ElevenLabs neural engine. Add ELEVENLABS_API_KEY to AI Studio Secrets for studio-grade audio.",
+                                text = voiceCapability.fallbackReason ?: "Studio-grade neural speech generated via ElevenLabs with human inflection and emotion curves.",
                                 fontSize = 11.sp,
                                 color = TextSecondary
                             )

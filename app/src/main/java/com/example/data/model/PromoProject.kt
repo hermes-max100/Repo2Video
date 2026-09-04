@@ -23,6 +23,15 @@ data class PromoProject(
     val transitionStyle: String = TransitionStyle.METALLIC_SWOOSH.name,
     val scenesJson: String = "[]",
     val activeAspectRatio: String = AspectRatioFormat.LANDSCAPE_16_9.name,
+    val syncState: String = SyncState.LOCAL_ONLY.name,
+    val lastSyncAttemptAt: Long? = null,
+    val syncRetryCount: Int = 0,
+    val syncConflictOutcome: String? = null,
+    val scanManifestJson: String = "{}",
+    val creativeBriefJson: String = "{}",
+    val claimEvidencesJson: String = "[]",
+    val licensingMetadataJson: String = "[]",
+    val rawSourceDeleted: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

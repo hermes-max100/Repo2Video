@@ -28,6 +28,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.FactCheck
+import com.example.ui.components.DeterministicManifestCard
+import com.example.ui.components.IngestionConsentDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -89,8 +94,12 @@ fun ScannerScreen(
     val brandProfile by viewModel.brandProfile.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+    val scanManifest by viewModel.scanManifest.collectAsState()
+    val ingestionPolicy by viewModel.ingestionPolicy.collectAsState()
+    val sanitizedPayload by viewModel.sanitizedPayload.collectAsState()
 
     var repoInput by remember { mutableStateOf(brandProfile.repoPathOrUrl) }
+    var showConsentDialog by remember { mutableStateOf(false) }
 
     val presetRepos = listOf(
         "AKCodez/promo-video-skill" to "PromoVideo AI",
@@ -269,6 +278,62 @@ fun ScannerScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
+                            // Repository Ingestion Permission & Sensitive Filter Banner
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0x1A10B981),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x3310B981)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showConsentDialog = true }
+                                    .testTag("open_consent_dialog_card")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0x3310B981)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Security,
+                                                contentDescription = null,
+                                                tint = AccentEmerald,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = "Zero-Leakage Ingestion Privacy",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                            Text(
+                                                text = if (ingestionPolicy.contentAuthorityConfirmed) "Deny-by-default active • Authority confirmed" else "Configure exclusions (.env, keys) & review policy",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (ingestionPolicy.contentAuthorityConfirmed) AccentEmerald else AccentAmber
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "Review",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentEmerald
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
                             // Quick preset chips
                             Text(
                                 text = "QUICK REPO PRESETS",
@@ -293,7 +358,7 @@ fun ScannerScreen(
                                         ),
                                         modifier = Modifier.clickable {
                                             repoInput = repo
-                                            viewModel.scanCodebase(repo)
+                                            viewModel.updateIngestionPolicy(ingestionPolicy.copy(repoUrlOrPath = repo))
                                         }
                                     ) {
                                         Text(
@@ -309,8 +374,16 @@ fun ScannerScreen(
 
                             Spacer(modifier = Modifier.height(16.dp))
 
+                            // Consent-first scanning button
                             Button(
-                                onClick = { viewModel.scanCodebase(repoInput) },
+                                onClick = {
+                                    viewModel.updateIngestionPolicy(ingestionPolicy.copy(repoUrlOrPath = repoInput))
+                                    if (ingestionPolicy.contentAuthorityConfirmed) {
+                                        viewModel.executeIngestionWithConsent()
+                                    } else {
+                                        showConsentDialog = true
+                                    }
+                                },
                                 enabled = !isScanning && repoInput.isNotBlank(),
                                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
                                 shape = RoundedCornerShape(16.dp),
@@ -326,16 +399,20 @@ fun ScannerScreen(
                                         strokeWidth = 2.dp
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Scanning Codebase & Features...", color = Color.White)
+                                    Text("Sanitizing & Generating Manifest...", color = Color.White)
                                 } else {
                                     Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
+                                        imageVector = Icons.Default.Security,
                                         contentDescription = null,
                                         modifier = Modifier.size(18.dp),
-                                        tint = Color.White
+                                        tint = AccentEmerald
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Run Brand & Feature Discovery", fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(
+                                        text = if (ingestionPolicy.contentAuthorityConfirmed) "Scan With Zero-Leakage Filter" else "Review Ingestion & Scan",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
                                 }
                             }
 
@@ -349,6 +426,17 @@ fun ScannerScreen(
                                 )
                             }
                         }
+                    }
+                }
+
+                // Deterministic Scan Manifest Review Card
+                if (scanManifest != null) {
+                    item {
+                        DeterministicManifestCard(
+                            manifest = scanManifest!!,
+                            onUpdateManifest = { viewModel.updateDeterministicManifest(it) },
+                            onDeleteRawSource = { viewModel.deleteProjectSourceData() }
+                        )
                     }
                 }
 
@@ -555,6 +643,26 @@ fun ScannerScreen(
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
+        }
+
+        if (showConsentDialog) {
+            IngestionConsentDialog(
+                initialPolicy = ingestionPolicy.copy(repoUrlOrPath = repoInput),
+                sanitizedPayload = sanitizedPayload,
+                onDismiss = { showConsentDialog = false },
+                onPreviewSanitization = { updatedPolicy ->
+                    viewModel.updateIngestionPolicy(updatedPolicy)
+                    viewModel.previewSanitizedPayload(repoInput)
+                },
+                onConfirmIngestion = { updatedPolicy ->
+                    viewModel.updateIngestionPolicy(updatedPolicy)
+                    showConsentDialog = false
+                    viewModel.executeIngestionWithConsent(
+                        customAppName = null,
+                        onSuccess = {}
+                    )
+                }
+            )
         }
     }
 }

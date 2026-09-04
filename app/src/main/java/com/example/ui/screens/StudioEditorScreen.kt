@@ -34,6 +34,12 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.VideoCameraBack
+import androidx.compose.material.icons.filled.FactCheck
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.VerifiedUser
+import com.example.domain.manager.VoiceEngineType
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -108,6 +114,9 @@ fun StudioEditorScreen(
     val voiceActor by viewModel.voiceActor.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val isVoiceSynthesizing by viewModel.isVoiceSynthesizing.collectAsState()
+    val scanManifest by viewModel.scanManifest.collectAsState()
+    val voiceCapability by viewModel.voiceCapability.collectAsState()
+    val claimEvidences by viewModel.claimEvidences.collectAsState()
 
     val currentScene = scenes.getOrNull(activeSceneIndex)
 
@@ -557,22 +566,26 @@ fun StudioEditorScreen(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Text("Voiceover Narration Script", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                        if (viewModel.isElevenLabsConfigured) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(Color(0x2610B981))
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(6.dp)
-                                                            .clip(CircleShape)
-                                                            .background(AccentEmerald)
-                                                    )
-                                                    Text("ElevenLabs HD", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
-                                                }
+                                        val isEleven = voiceCapability.activeEngine == VoiceEngineType.ELEVENLABS_NEURAL && !voiceCapability.isFallback
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (isEleven) Color(0x2610B981) else Color(0x26F59E0B))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (isEleven) AccentEmerald else AccentAmber)
+                                                )
+                                                Text(
+                                                    text = if (isEleven) "ElevenLabs HD" else "Local TTS",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isEleven) AccentEmerald else AccentAmber
+                                                )
                                             }
                                         }
                                     }
@@ -816,6 +829,83 @@ fun StudioEditorScreen(
 
                                 Spacer(modifier = Modifier.height(16.dp))
 
+                                // CLAIM-EVIDENCE GROUNDING LINKAGE
+                                val linkedClaim = claimEvidences.getOrNull(activeSceneIndex.coerceAtMost((claimEvidences.size - 1).coerceAtLeast(0)))
+                                if (linkedClaim != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(Color(0x1A10B981))
+                                            .border(1.dp, Color(0x3310B981), RoundedCornerShape(16.dp))
+                                            .padding(12.dp)
+                                    ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.FactCheck,
+                                                        contentDescription = null,
+                                                        tint = AccentEmerald,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = "VERIFIED CLAIM GROUNDING",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = AccentEmerald,
+                                                        letterSpacing = 1.sp
+                                                    )
+                                                }
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = Color(0x3310B981)
+                                                ) {
+                                                    Text(
+                                                        text = if (linkedClaim.isVerified) "Verified (100%)" else "Unverified",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = AccentEmerald,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Text(
+                                                text = "\"${linkedClaim.claimText}\"",
+                                                fontSize = 12.sp,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Link,
+                                                    contentDescription = null,
+                                                    tint = TextMuted,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Text(
+                                                    text = "Cited: ${linkedClaim.sourceFile} (${linkedClaim.lineReference})",
+                                                    fontSize = 10.sp,
+                                                    color = TextMuted,
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
+
                                 // Veo 3 Video Generator Button
                                 Button(
                                     onClick = { viewModel.generateVeoVideoForScene(activeSceneIndex) },
@@ -832,6 +922,125 @@ fun StudioEditorScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text("Generate Veo 3 Video Clip for Scene", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // REPOSITORY PRIVACY & SOURCE PURGE CARD
+                item {
+                    val isPurged = scanManifest?.rawSourceDeleted == true
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(GlassBackground)
+                            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isPurged) Color(0x2610B981) else Color(0x26EF4444)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isPurged) Icons.Default.Shield else Icons.Default.DeleteSweep,
+                                            contentDescription = null,
+                                            tint = if (isPurged) AccentEmerald else AccentRose,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "SOURCE PRIVACY",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.5.sp,
+                                            color = TextMuted
+                                        )
+                                        Text(
+                                            text = "Repository Code Retention",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isPurged) Color(0x2210B981) else Color(0x22EF4444)
+                                ) {
+                                    Text(
+                                        text = if (isPurged) "Purged" else "Cached",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isPurged) AccentEmerald else AccentRose,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = if (isPurged)
+                                    "Scanned source files and AST buffers have been permanently erased from local database storage. Storyboard scenes and exports remain fully intact."
+                                else
+                                    "Parsed code buffers are currently stored locally to link claims. You can permanently purge all raw code files and reclaim cache disk space at any time.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                                lineHeight = 16.sp
+                            )
+
+                            if (!isPurged) {
+                                Button(
+                                    onClick = { viewModel.deleteProjectSourceData() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x26EF4444)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentRose.copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.fillMaxWidth().height(44.dp).testTag("purge_source_data_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DeleteSweep,
+                                        contentDescription = null,
+                                        tint = AccentRose,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Purge Raw Source Data & Clear Cache",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentRose
+                                    )
+                                }
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VerifiedUser,
+                                        contentDescription = null,
+                                        tint = AccentEmerald,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "Raw code data purged. Zero lingering repository code on device.",
+                                        fontSize = 11.sp,
+                                        color = AccentEmerald,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
                             }
                         }
