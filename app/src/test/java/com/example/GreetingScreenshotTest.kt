@@ -24,7 +24,7 @@ class GreetingScreenshotTest {
   fun greeting_screenshot() {
     composeTestRule.setContent {
       MyApplicationTheme {
-        Text("PromoVideo Studio")
+        Text("DevDirector Studio")
       }
     }
 

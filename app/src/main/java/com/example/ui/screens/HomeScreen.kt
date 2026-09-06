@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
@@ -79,6 +80,7 @@ import com.example.ui.theme.AccentEmerald
 import com.example.ui.theme.AccentEmeraldLight
 import com.example.ui.theme.AccentOrange
 import com.example.ui.theme.AccentRed
+import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.GlassBackground
@@ -107,10 +109,12 @@ fun HomeScreen(
     onNavigateToExport: () -> Unit,
     onOpenDirectorChat: () -> Unit,
     onOpenGrokOAuth: () -> Unit = {},
-    onOpenGoogleOAuth: () -> Unit = {}
+    onOpenGoogleOAuth: () -> Unit = {},
+    onOpenAppearance: () -> Unit = {}
 ) {
     val projects by viewModel.projects.collectAsState()
     val currentProject by viewModel.currentProject.collectAsState()
+    val currentThemeMode by viewModel.currentThemeMode.collectAsState()
     val xaiAuthState by viewModel.xaiAuthState.collectAsState()
     val isGrokConnected = xaiAuthState is com.example.service.XAiAuthState.Connected
     val googleAuthState by viewModel.googleAuthState.collectAsState()
@@ -129,7 +133,7 @@ fun HomeScreen(
         label = "pulse_alpha"
     )
 
-    Box(modifier = Modifier.fillMaxSize().immersiveGradientBackground()) {
+    Box(modifier = Modifier.fillMaxSize().immersiveGradientBackground(themeMode = currentThemeMode)) {
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -155,7 +159,7 @@ fun HomeScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Movie,
-                                    contentDescription = "PromoVideo",
+                                    contentDescription = "DevDirector",
                                     tint = Color.White,
                                     modifier = Modifier.size(24.dp)
                                 )
@@ -163,10 +167,10 @@ fun HomeScreen(
 
                             Column {
                                 Text(
-                                    text = "PromoVideo",
+                                    text = "DevDirector",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     letterSpacing = (-0.25).sp
                                 )
                                 Row(
@@ -278,6 +282,27 @@ fun HomeScreen(
                                     color = if (isGrokConnected) AccentEmerald else TextSecondary
                                 )
                             }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Appearance / Workspace Theme Selector Button
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(GlassBackground)
+                                .border(1.dp, GlassBorder, CircleShape)
+                                .clickable { onOpenAppearance() }
+                                .testTag("home_appearance_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Palette,
+                                contentDescription = "Workspace Appearance",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
 
                         Spacer(modifier = Modifier.width(6.dp))
@@ -406,6 +431,14 @@ fun HomeScreen(
                     SettingsGrid(
                         currentProject = currentProject,
                         onOpenSettings = onNavigateToStudio
+                    )
+                }
+
+                item {
+                    // Workspace Theme Appearance Settings
+                    WorkspaceThemeCard(
+                        currentThemeMode = currentThemeMode,
+                        onOpenAppearance = onOpenAppearance
                     )
                 }
 
@@ -1164,3 +1197,107 @@ private fun ProjectCardItem(
         }
     }
 }
+
+/**
+ * Workspace Theme Card: Quick access to DevDirector's 5 theme modes from home
+ */
+@Composable
+private fun WorkspaceThemeCard(
+    currentThemeMode: AppThemeMode,
+    onOpenAppearance: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(GlassBackground)
+            .border(1.dp, GlassBorder, RoundedCornerShape(24.dp))
+            .clickable { onOpenAppearance() }
+            .padding(16.dp)
+            .testTag("workspace_theme_dashboard_card")
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0x266366F1)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Palette,
+                        contentDescription = "Appearance",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "WORKSPACE THEME",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.4.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(currentThemeMode.previewPrimary)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = currentThemeMode.displayName,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = currentThemeMode.description,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Color preview dots
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(currentThemeMode.previewPrimary))
+                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(currentThemeMode.previewSecondary))
+                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(currentThemeMode.previewBackground).border(0.5.dp, Color.Gray.copy(alpha = 0.5f), CircleShape))
+                }
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Customize Theme",
+                    tint = TextMuted,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+

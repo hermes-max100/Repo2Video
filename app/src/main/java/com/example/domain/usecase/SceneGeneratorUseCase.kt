@@ -47,7 +47,7 @@ class SceneGeneratorUseCase {
             // Dynamic snippet generation
             val codeSnippet = when (visualType) {
                 SceneVisualType.CODE_TERMINAL -> "import { Composition } from 'remotion';\nexport const Promo = () => <Sequence />;"
-                SceneVisualType.HOOK_FRUSTRATION -> "$ npx repo2video scan ${brief.title.lowercase()}\n✓ Deterministic scan verified in 142ms\n✓ Secrets filtered: 0 leaked"
+                SceneVisualType.HOOK_FRUSTRATION -> "$ npx devdirector scan ${brief.title.lowercase()}\n✓ Deterministic scan verified in 142ms\n✓ Secrets filtered: 0 leaked"
                 else -> null
             }
 

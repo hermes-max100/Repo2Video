@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "PromoVideo"
+rootProject.name = "DevDirector"
 
 include(":app")

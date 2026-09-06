@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.ui.screens.AppearanceDialog
 import com.example.ui.screens.CreativeDirectionScreen
 import com.example.ui.screens.DirectorChatDialog
 import com.example.ui.screens.ExportScreen
@@ -41,19 +43,21 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            MyApplicationTheme {
-                PromoVideoApp(viewModel = promoViewModel)
+            val themeMode by promoViewModel.currentThemeMode.collectAsState()
+            MyApplicationTheme(themeMode = themeMode) {
+                DevDirectorApp(viewModel = promoViewModel)
             }
         }
     }
 }
 
 @Composable
-fun PromoVideoApp(viewModel: PromoViewModel) {
+fun DevDirectorApp(viewModel: PromoViewModel) {
     val navController = rememberNavController()
     var showDirectorChat by remember { mutableStateOf(false) }
     var showGrokOAuthDialog by remember { mutableStateOf(false) }
     var showGoogleOAuthDialog by remember { mutableStateOf(false) }
+    var showAppearanceDialog by remember { mutableStateOf(false) }
 
     NavHost(
         navController = navController,
@@ -68,7 +72,8 @@ fun PromoVideoApp(viewModel: PromoViewModel) {
                 onNavigateToExport = { navController.navigate(ROUTE_EXPORT) },
                 onOpenDirectorChat = { showDirectorChat = true },
                 onOpenGrokOAuth = { showGrokOAuthDialog = true },
-                onOpenGoogleOAuth = { showGoogleOAuthDialog = true }
+                onOpenGoogleOAuth = { showGoogleOAuthDialog = true },
+                onOpenAppearance = { showAppearanceDialog = true }
             )
         }
 
@@ -106,6 +111,13 @@ fun PromoVideoApp(viewModel: PromoViewModel) {
         }
     }
 
+    if (showAppearanceDialog) {
+        AppearanceDialog(
+            viewModel = viewModel,
+            onDismiss = { showAppearanceDialog = false }
+        )
+    }
+
     if (showDirectorChat) {
         DirectorChatDialog(
             viewModel = viewModel,
@@ -127,4 +139,12 @@ fun PromoVideoApp(viewModel: PromoViewModel) {
             onDismiss = { showGoogleOAuthDialog = false }
         )
     }
+}
+
+/**
+ * Backward compatibility alias for tests and previews
+ */
+@Composable
+fun PromoVideoApp(viewModel: PromoViewModel) {
+    DevDirectorApp(viewModel = viewModel)
 }

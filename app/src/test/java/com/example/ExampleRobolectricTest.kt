@@ -25,7 +25,25 @@ class ExampleRobolectricTest {
     fun `read string from context`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val appName = context.getString(R.string.app_name)
-        assertEquals("PromoVideo", appName)
+        assertEquals("DevDirector", appName)
+    }
+
+    @Test
+    fun `verify all 5 devdirector theme modes exist`() {
+        val modes = com.example.ui.theme.AppThemeMode.entries
+        assertEquals(5, modes.size)
+        assertTrue(modes.contains(com.example.ui.theme.AppThemeMode.SYSTEM))
+        assertTrue(modes.contains(com.example.ui.theme.AppThemeMode.STUDIO_LIGHT))
+        assertTrue(modes.contains(com.example.ui.theme.AppThemeMode.STUDIO_DARK))
+        assertTrue(modes.contains(com.example.ui.theme.AppThemeMode.NEON_DIRECTOR))
+        assertTrue(modes.contains(com.example.ui.theme.AppThemeMode.CYBER_DIRECTOR))
+
+        assertEquals(com.example.ui.theme.AppThemeMode.SYSTEM, com.example.ui.theme.AppThemeMode.fromId("system"))
+        assertEquals(com.example.ui.theme.AppThemeMode.STUDIO_LIGHT, com.example.ui.theme.AppThemeMode.fromId("studio_light"))
+        assertEquals(com.example.ui.theme.AppThemeMode.STUDIO_DARK, com.example.ui.theme.AppThemeMode.fromId("studio_dark"))
+        assertEquals(com.example.ui.theme.AppThemeMode.NEON_DIRECTOR, com.example.ui.theme.AppThemeMode.fromId("neon_director"))
+        assertEquals(com.example.ui.theme.AppThemeMode.CYBER_DIRECTOR, com.example.ui.theme.AppThemeMode.fromId("cyber_director"))
+        assertEquals(com.example.ui.theme.AppThemeMode.SYSTEM, com.example.ui.theme.AppThemeMode.fromId("unknown_id"))
     }
 
     @Test

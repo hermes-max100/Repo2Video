@@ -9,7 +9,7 @@ class ProjectBundleExporter {
     fun exportToJson(bundle: ProjectBundle): String {
         val root = JSONObject()
         root.put("formatVersion", bundle.formatVersion)
-        root.put("generator", "DevDirector / Repo2Video v2.0")
+        root.put("generator", "DevDirector v2.0")
         root.put("projectId", bundle.projectId)
         root.put("projectTitle", bundle.projectTitle)
         root.put("exportedAt", bundle.exportedAt)

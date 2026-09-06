@@ -50,6 +50,8 @@ import com.example.service.VoiceoverManager
 import com.example.service.XAiAuthState
 import com.example.service.XAiGrokService
 import com.example.service.XAiOAuthService
+import com.example.ui.theme.AppThemeMode
+import com.example.ui.theme.ThemePreferencesRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -66,6 +68,16 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     val mediaLifecycleManager = MediaLifecycleManager(application)
     val voiceCapabilityManager = VoiceCapabilityManager(application)
     val voiceCapability: StateFlow<VoiceCapabilityState> = voiceCapabilityManager.capabilityState
+
+    private val themeRepository = ThemePreferencesRepository(application)
+    val currentThemeMode: StateFlow<AppThemeMode> = themeRepository.themeMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AppThemeMode.SYSTEM)
+
+    fun setThemeMode(mode: AppThemeMode) {
+        viewModelScope.launch {
+            themeRepository.setThemeMode(mode)
+        }
+    }
 
     private val scannerUseCase = SanitizedRepoScannerUseCase()
     private val creativePlannerUseCase = CreativePlannerUseCase()
