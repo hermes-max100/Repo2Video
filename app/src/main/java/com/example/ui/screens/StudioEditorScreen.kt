@@ -96,6 +96,8 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.immersiveGradientBackground
+import com.example.ui.components.WorkflowProgressCard
+import com.example.ui.components.WorkflowStep
 import com.example.ui.viewmodel.PromoViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -114,6 +116,8 @@ fun StudioEditorScreen(
     val voiceActor by viewModel.voiceActor.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val isVoiceSynthesizing by viewModel.isVoiceSynthesizing.collectAsState()
+    val voiceProgressPercent by viewModel.voiceSynthesisProgressPercent.collectAsState()
+    val voiceStageText by viewModel.voiceSynthesisStageText.collectAsState()
     val scanManifest by viewModel.scanManifest.collectAsState()
     val voiceCapability by viewModel.voiceCapability.collectAsState()
     val claimEvidences by viewModel.claimEvidences.collectAsState()
@@ -250,6 +254,19 @@ fun StudioEditorScreen(
             ) {
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
+                    WorkflowProgressCard(
+                        viewModel = viewModel,
+                        currentStep = WorkflowStep.PREVIEW,
+                        onStepClick = { step ->
+                            when (step) {
+                                WorkflowStep.IMPORT, WorkflowStep.NARRATIVE -> onNavigateBack()
+                                WorkflowStep.VOICEOVER, WorkflowStep.PREVIEW, WorkflowStep.EXPORT -> { /* current screen */ }
+                            }
+                        }
+                    )
+                }
+
+                item {
                     // THE LIVE VIDEO PLAYER VIEWPORT
                     VideoPlayerView(
                         scenes = scenes,
@@ -265,6 +282,133 @@ fun StudioEditorScreen(
                         onPlayPauseToggle = { viewModel.togglePlayback(it) },
                         modifier = Modifier.testTag("interactive_video_canvas")
                     )
+                }
+
+                // VOICEOVER BATCH SYNTHESIS & ENGINE STATUS
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(GlassBackground)
+                            .border(1.dp, GlassBorder, RoundedCornerShape(24.dp))
+                            .padding(16.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0x3310B981)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                            contentDescription = null,
+                                            tint = AccentEmerald,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "VOICEOVER SYNTHESIS ENGINE",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.2.sp,
+                                            color = TextMuted
+                                        )
+                                        Text(
+                                            text = "${voiceActor.voiceName} • ${voiceCapability.engineTitle}",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (isVoiceSynthesizing) {
+                                            viewModel.stopVoiceover()
+                                        } else {
+                                            viewModel.synthesizeAllScenesVoiceover()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isVoiceSynthesizing) AccentAmber else PrimaryIndigo
+                                    ),
+                                    shape = RoundedCornerShape(14.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                    modifier = Modifier.testTag("batch_synthesize_voiceover_button")
+                                ) {
+                                    if (isVoiceSynthesizing) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Stop", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = Color.White
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Synthesize All", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                            }
+
+                            if (isVoiceSynthesizing || voiceProgressPercent > 0) {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = if (voiceStageText.isNotEmpty()) voiceStageText else "Rendering audio stems...",
+                                            fontSize = 11.sp,
+                                            color = TextSecondary,
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = "$voiceProgressPercent%",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = AccentEmerald
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(Color(0x1AFFFFFF))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(voiceProgressPercent / 100f)
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp))
+                                                .background(AccentEmerald)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // HORIZONTAL SCENE TIMELINE STRIP

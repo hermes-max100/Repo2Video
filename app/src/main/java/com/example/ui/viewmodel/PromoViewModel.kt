@@ -36,6 +36,7 @@ import com.example.domain.manager.VoiceCapabilityManager
 import com.example.domain.manager.VoiceCapabilityState
 import com.example.domain.usecase.CreativePlannerUseCase
 import com.example.domain.usecase.ProjectBundleExporter
+import com.example.domain.usecase.ProjectBundleImporter
 import com.example.domain.usecase.SanitizedRepoScannerUseCase
 import com.example.domain.usecase.SceneGeneratorUseCase
 import com.example.domain.usecase.ScriptwriterUseCase
@@ -84,6 +85,7 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     private val scriptwriterUseCase = ScriptwriterUseCase()
     private val sceneGeneratorUseCase = SceneGeneratorUseCase()
     private val bundleExporter = ProjectBundleExporter()
+    private val bundleImporter = ProjectBundleImporter()
 
     private val geminiService = GeminiPromoService()
     private val xaiOAuthService = XAiOAuthService(application)
@@ -196,6 +198,12 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     private val _isVoiceSynthesizing = MutableStateFlow(false)
     val isVoiceSynthesizing: StateFlow<Boolean> = _isVoiceSynthesizing.asStateFlow()
 
+    private val _voiceSynthesisProgressPercent = MutableStateFlow(0)
+    val voiceSynthesisProgressPercent: StateFlow<Int> = _voiceSynthesisProgressPercent.asStateFlow()
+
+    private val _voiceSynthesisStageText = MutableStateFlow("")
+    val voiceSynthesisStageText: StateFlow<String> = _voiceSynthesisStageText.asStateFlow()
+
     init {
         val database = PromoDatabase.getDatabase(application)
         repository = PromoRepository(database.promoDao())
@@ -239,9 +247,9 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     // Active brand profile
     private val _brandProfile = MutableStateFlow(
         BrandProfile(
-            name = "PromoVideo",
+            name = "DevDirector",
             tagline = "Turn any codebase into high-impact promo videos",
-            description = "Point Claude Code or AI at your repo. Render landscape and portrait videos in seconds.",
+            description = "Point AI at your repo. Render landscape and portrait videos in seconds.",
             logoIcon = "movie_filter",
             primaryColorHex = "#6366F1",
             secondaryColorHex = "#8B5CF6",
@@ -254,7 +262,7 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
                 "Automated brand color discovery"
             ),
             targetAudience = "Developers, founders & creators",
-            repoPathOrUrl = "AKCodez/promo-video-skill"
+            repoPathOrUrl = "AKCodez/devdirector"
         )
     )
     val brandProfile: StateFlow<BrandProfile> = _brandProfile.asStateFlow()
@@ -293,8 +301,20 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
+    private val _scanProgressPercent = MutableStateFlow(0)
+    val scanProgressPercent: StateFlow<Int> = _scanProgressPercent.asStateFlow()
+
+    private val _scanStageText = MutableStateFlow("")
+    val scanStageText: StateFlow<String> = _scanStageText.asStateFlow()
+
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
+
+    private val _narrativeProgressPercent = MutableStateFlow(0)
+    val narrativeProgressPercent: StateFlow<Int> = _narrativeProgressPercent.asStateFlow()
+
+    private val _narrativeStageText = MutableStateFlow("")
+    val narrativeStageText: StateFlow<String> = _narrativeStageText.asStateFlow()
 
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
@@ -409,14 +429,20 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             _isScanning.value = true
+            _scanProgressPercent.value = 15
+            _scanStageText.value = "Connecting to repository: $normalized"
             _statusMessage.value = "Running deny-by-default secret scanning & payload sanitization..."
 
             // 1. Sanitize content (enforcing budgets and secret filtering)
+            _scanProgressPercent.value = 35
+            _scanStageText.value = "Redacting secrets & sanitizing code files..."
             val sampleContent = "Repository: $normalized\nPackage: ${policy.repoUrlOrPath}\nConfig: Remotion 4.0\nFramework: React 19\nLicense: MIT"
             val payload = scannerUseCase.sanitizeRepositoryContent(sampleContent, policy)
             _sanitizedPayload.value = payload
 
             // 2. Generate Deterministic Scan Manifest
+            _scanProgressPercent.value = 60
+            _scanStageText.value = "Generating deterministic scan manifest..."
             val manifest = scannerUseCase.createDeterministicManifest(
                 repoUrl = normalized,
                 sanitizedPayload = payload,
@@ -425,6 +451,8 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
             _scanManifest.value = manifest
 
             // 3. Audit Content Safety
+            _scanProgressPercent.value = 75
+            _scanStageText.value = "Auditing claims & content safety..."
             val safetyCheck = creativePlannerUseCase.auditContentSafety(
                 manifest = manifest,
                 marketingAuthorityConfirmed = policy.contentAuthorityConfirmed
@@ -432,6 +460,8 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
             _contentSafetyCheck.value = safetyCheck
 
             // 4. Create Structured Creative Brief
+            _scanProgressPercent.value = 90
+            _scanStageText.value = "Creating structured creative brief..."
             val briefResult = creativePlannerUseCase.createStructuredBrief(
                 manifest = manifest,
                 template = _narrativeTemplate.value,
@@ -469,10 +499,14 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
                 _licensingManifest.value = licensing
                 _activeSceneIndex.value = 0
 
+                _scanProgressPercent.value = 100
+                _scanStageText.value = "Scan manifest complete!"
                 _statusMessage.value = "Sanitized manifest created: ${manifest.appName} (${newScenes.size} scenes linked to evidence)"
                 saveCurrentProject()
                 onSuccess()
             }.onFailure { err ->
+                _scanProgressPercent.value = 0
+                _scanStageText.value = "Error: ${err.message}"
                 _statusMessage.value = "Brief planning error: ${err.message}"
                 onError(err.message ?: "Planning error")
             }
@@ -616,12 +650,17 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     fun generateScript() {
         viewModelScope.launch {
             _isGenerating.value = true
+            _narrativeProgressPercent.value = 20
+            _narrativeStageText.value = "Analyzing brand identity & audience..."
             val isGrok = _aiEngine.value == AiEngine.GROK && xaiGrokService.isAvailable
             _statusMessage.value = if (isGrok) {
                 "SuperGrok: Building storyboard with Grok 2 (${_narrativeTemplate.value.title})..."
             } else {
                 "Phase 2 & 3: Building Remotion scenes with ${_narrativeTemplate.value.title}..."
             }
+
+            _narrativeProgressPercent.value = 45
+            _narrativeStageText.value = "Formulating emotional hook (${_narrativeTemplate.value.title})..."
 
             val result = if (isGrok) {
                 val grokRes = xaiGrokService.generatePromoScript(
@@ -642,13 +681,20 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
 
+            _narrativeProgressPercent.value = 75
+            _narrativeStageText.value = "Drafting scene-by-scene script with claim links..."
+
             result.onSuccess { generatedScenes ->
                 _scenes.value = generatedScenes
                 _activeSceneIndex.value = 0
                 val engineLabel = if (isGrok) "SuperGrok" else "Gemini"
+                _narrativeProgressPercent.value = 100
+                _narrativeStageText.value = "Narrative storyboard generated ($engineLabel)!"
                 _statusMessage.value = "$engineLabel generated ${generatedScenes.size} scenes ready for preview!"
                 saveCurrentProject()
             }.onFailure { err ->
+                _narrativeProgressPercent.value = 0
+                _narrativeStageText.value = "Error: ${err.message}"
                 _statusMessage.value = "Error generating script: ${err.message}"
             }
             _isGenerating.value = false
@@ -898,6 +944,111 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
                 _statusMessage.value = "Veo generated simulated animation."
             }
         }
+    }
+
+    fun importProjectBundleJson(json: String): Boolean {
+        val result = bundleImporter.importFromJson(json)
+        return when (result) {
+            is ProjectBundleImporter.ImportResult.Success -> {
+                loadProject(result.project)
+                _scanManifest.value = result.bundle.scanManifest
+                _creativeBrief.value = result.bundle.creativeBrief
+                _claimEvidences.value = result.bundle.claims
+                _licensingManifest.value = result.bundle.licensingManifest
+                _statusMessage.value = "Imported '${result.project.title}' (${result.bundle.scenes.size} scenes)"
+                saveCurrentProject()
+                true
+            }
+            is ProjectBundleImporter.ImportResult.Error -> {
+                _statusMessage.value = "Import error: ${result.message}"
+                false
+            }
+        }
+    }
+
+    fun importGitRepository(repoUrl: String, onComplete: (Boolean) -> Unit = {}) {
+        _ingestionPolicy.value = _ingestionPolicy.value.copy(repoUrlOrPath = repoUrl)
+        viewModelScope.launch {
+            _isScanning.value = true
+            _scanProgressPercent.value = 15
+            _scanStageText.value = "Connecting to repository: $repoUrl"
+            kotlinx.coroutines.delay(200)
+
+            _scanProgressPercent.value = 40
+            _scanStageText.value = "Redacting secrets & analyzing AST..."
+            kotlinx.coroutines.delay(250)
+
+            executeIngestionWithConsent(
+                onSuccess = {
+                    _scanProgressPercent.value = 100
+                    _scanStageText.value = "Repository imported successfully!"
+                    _isScanning.value = false
+                    onComplete(true)
+                },
+                onError = { err ->
+                    _statusMessage.value = "Import failed: $err"
+                    _isScanning.value = false
+                    onComplete(false)
+                }
+            )
+        }
+    }
+
+    fun generateNarrativeArc(template: NarrativeTemplate, hookCustomPrompt: String? = null) {
+        _narrativeTemplate.value = template
+        viewModelScope.launch {
+            _isGenerating.value = true
+            _narrativeProgressPercent.value = 20
+            _narrativeStageText.value = "Analyzing brand identity & audience..."
+            kotlinx.coroutines.delay(200)
+
+            _narrativeProgressPercent.value = 45
+            _narrativeStageText.value = "Crafting narrative hook (${template.title})..."
+            kotlinx.coroutines.delay(250)
+
+            _narrativeProgressPercent.value = 70
+            _narrativeStageText.value = "Drafting scene-by-scene script & claim evidence..."
+            kotlinx.coroutines.delay(200)
+
+            generateScript()
+
+            _narrativeProgressPercent.value = 100
+            _narrativeStageText.value = "Narrative arc ready!"
+            _isGenerating.value = false
+        }
+    }
+
+    fun synthesizeAllScenesVoiceover(
+        onProgress: (Int, String) -> Unit = { _, _ -> },
+        onComplete: () -> Unit = {}
+    ) {
+        val currentScenes = _scenes.value
+        if (currentScenes.isEmpty()) return
+
+        viewModelScope.launch {
+            _isVoiceSynthesizing.value = true
+            val total = currentScenes.size
+            for (i in currentScenes.indices) {
+                val s = currentScenes[i]
+                val pct = ((i + 1) * 100) / total
+                val stage = "Synthesizing scene ${i + 1}/$total: '${s.title}' (${_voiceActor.value.voiceName})"
+                _voiceSynthesisProgressPercent.value = pct
+                _voiceSynthesisStageText.value = stage
+                onProgress(pct, stage)
+                voiceoverManager.prefetchScenes(listOf(s.voiceover to s.emotionalPreset), _voiceActor.value)
+                kotlinx.coroutines.delay(350)
+            }
+            _voiceSynthesisProgressPercent.value = 100
+            _voiceSynthesisStageText.value = "All $total scene voiceovers ready in HD!"
+            _statusMessage.value = "Voiceover ready for all $total scenes!"
+            _isVoiceSynthesizing.value = false
+            onComplete()
+        }
+    }
+
+    fun stopVoiceover() {
+        voiceoverManager.stop()
+        _isVoiceSynthesizing.value = false
     }
 
     private fun parseJsonList(jsonStr: String): List<String> {

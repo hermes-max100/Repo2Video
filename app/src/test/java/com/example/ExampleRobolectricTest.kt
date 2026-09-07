@@ -80,4 +80,38 @@ class ExampleRobolectricTest {
         assertTrue(NarrativeTemplate.values().isNotEmpty())
         assertTrue(TransitionStyle.values().contains(TransitionStyle.METALLIC_SWOOSH))
     }
+
+    @Test
+    fun `verify workflow step enum`() {
+        val steps = com.example.ui.components.WorkflowStep.entries
+        assertEquals(5, steps.size)
+        assertEquals(com.example.ui.components.WorkflowStep.IMPORT, steps[0])
+        assertEquals(com.example.ui.components.WorkflowStep.NARRATIVE, steps[1])
+        assertEquals(com.example.ui.components.WorkflowStep.VOICEOVER, steps[2])
+        assertEquals(com.example.ui.components.WorkflowStep.PREVIEW, steps[3])
+        assertEquals(com.example.ui.components.WorkflowStep.EXPORT, steps[4])
+    }
+
+    @Test
+    fun `verify project bundle importer parses package json`() {
+        val importer = com.example.domain.usecase.ProjectBundleImporter()
+        val samplePackageJson = """
+            {
+              "name": "devdirector-cli",
+              "description": "High velocity promo videos for developer tools",
+              "version": "1.0.0",
+              "dependencies": {
+                "react": "^18.0.0",
+                "remotion": "^4.0.0"
+              }
+            }
+        """.trimIndent()
+
+        val result = importer.importFromJson(samplePackageJson)
+        assertTrue("Import should succeed", result is com.example.domain.usecase.ProjectBundleImporter.ImportResult.Success)
+        val success = result as com.example.domain.usecase.ProjectBundleImporter.ImportResult.Success
+        assertEquals("Devdirector Cli", success.project.title)
+        assertTrue(success.bundle.scanManifest.technologies.contains("remotion"))
+        assertTrue(success.bundle.scenes.isNotEmpty())
+    }
 }

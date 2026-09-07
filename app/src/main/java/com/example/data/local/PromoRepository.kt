@@ -167,7 +167,7 @@ class PromoRepository(private val promoDao: PromoDao) {
         }
 
         fun getSampleProjects(): List<PromoProject> {
-            // Project 1: PromoVideo Skill (The featured project in the prompt)
+            // Project 1: DevDirector AI Skill (The flagship video generation project)
             val promoVideoScenes = listOf(
                 PromoScene(
                     orderIndex = 0,
@@ -338,10 +338,10 @@ class PromoRepository(private val promoDao: PromoDao) {
             return listOf(
                 PromoProject(
                     id = 1,
-                    title = "PromoVideo AI Skill",
+                    title = "DevDirector AI Skill",
                     tagline = "Turn any codebase into a professional promo video in one command",
-                    repoUrl = "AKCodez/promo-video-skill",
-                    brandName = "PromoVideo",
+                    repoUrl = "AKCodez/devdirector",
+                    brandName = "DevDirector",
                     primaryColorHex = "#6366F1",
                     secondaryColorHex = "#8B5CF6",
                     accentColorHex = "#F59E0B",

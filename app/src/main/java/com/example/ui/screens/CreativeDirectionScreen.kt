@@ -89,6 +89,8 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.immersiveGradientBackground
+import com.example.ui.components.WorkflowProgressCard
+import com.example.ui.components.WorkflowStep
 import com.example.ui.viewmodel.PromoViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -217,7 +219,20 @@ fun CreativeDirectionScreen(
             ) {
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
+                    WorkflowProgressCard(
+                        viewModel = viewModel,
+                        currentStep = WorkflowStep.NARRATIVE,
+                        onStepClick = { step ->
+                            when (step) {
+                                WorkflowStep.IMPORT -> onNavigateBack()
+                                WorkflowStep.NARRATIVE -> { /* already here */ }
+                                WorkflowStep.VOICEOVER, WorkflowStep.PREVIEW, WorkflowStep.EXPORT -> onNavigateToStudio()
+                            }
+                        }
+                    )
+                }
 
+                item {
                     // 0. AI Engine & SuperGrok OAuth Card
                     Box(
                         modifier = Modifier

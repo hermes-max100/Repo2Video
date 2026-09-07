@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Palette
@@ -61,6 +62,12 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.example.ui.components.ProjectImportDialog
+import com.example.ui.components.WorkflowProgressCard
+import com.example.ui.components.WorkflowStep
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -120,6 +127,8 @@ fun HomeScreen(
     val googleAuthState by viewModel.googleAuthState.collectAsState()
     val isGoogleConnected = googleAuthState is com.example.service.GoogleAuthState.Authenticated
     val googleUser = (googleAuthState as? com.example.service.GoogleAuthState.Authenticated)?.user
+
+    var showImportDialog by remember { mutableStateOf(false) }
 
     // Pulsing indicator animation for "Claude Code Active"
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
@@ -286,6 +295,27 @@ fun HomeScreen(
 
                         Spacer(modifier = Modifier.width(6.dp))
 
+                        // Project Importer Quick Action Button
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(GlassBackground)
+                                .border(1.dp, GlassBorder, CircleShape)
+                                .clickable { showImportDialog = true }
+                                .testTag("home_import_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Import Project",
+                                tint = AccentCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         // Appearance / Workspace Theme Selector Button
                         Box(
                             modifier = Modifier
@@ -419,6 +449,21 @@ fun HomeScreen(
             ) {
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
+                    // Workflow Progress Card
+                    WorkflowProgressCard(
+                        viewModel = viewModel,
+                        currentStep = WorkflowStep.IMPORT,
+                        onStepClick = { step ->
+                            when (step) {
+                                WorkflowStep.IMPORT -> showImportDialog = true
+                                WorkflowStep.NARRATIVE -> onNavigateToScanner()
+                                WorkflowStep.VOICEOVER, WorkflowStep.PREVIEW, WorkflowStep.EXPORT -> onNavigateToStudio()
+                            }
+                        }
+                    )
+                }
+
+                item {
                     // Brand Discovery / Source Scanning Section
                     SourceScanningCard(
                         currentProject = currentProject,
@@ -470,19 +515,51 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = GlassBackground,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = "${projects.size} ACTIVE",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextMuted,
-                                letterSpacing = 1.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = GlassBackground,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryIndigo),
+                                modifier = Modifier
+                                    .clickable { showImportDialog = true }
+                                    .testTag("promo_projects_import_button")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = "Import",
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "Import",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentCyan
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = GlassBackground,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                            ) {
+                                Text(
+                                    text = "${projects.size} ACTIVE",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextMuted,
+                                    letterSpacing = 1.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -505,6 +582,17 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
+        }
+
+        if (showImportDialog) {
+            ProjectImportDialog(
+                viewModel = viewModel,
+                onDismiss = { showImportDialog = false },
+                onProjectImported = {
+                    showImportDialog = false
+                    onNavigateToStudio()
+                }
+            )
         }
     }
 }

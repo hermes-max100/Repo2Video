@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.FactCheck
 import com.example.ui.components.DeterministicManifestCard
 import com.example.ui.components.IngestionConsentDialog
+import com.example.ui.components.WorkflowProgressCard
+import com.example.ui.components.WorkflowStep
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -102,7 +104,7 @@ fun ScannerScreen(
     var showConsentDialog by remember { mutableStateOf(false) }
 
     val presetRepos = listOf(
-        "AKCodez/promo-video-skill" to "PromoVideo AI",
+        "AKCodez/devdirector" to "DevDirector AI",
         "fastsolve/extension-core" to "FastSolve Extension",
         "remotion-dev/remotion" to "Remotion Framework",
         "shadcn/ui" to "Shadcn UI Components"
@@ -196,6 +198,20 @@ fun ScannerScreen(
             ) {
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
+                    WorkflowProgressCard(
+                        viewModel = viewModel,
+                        currentStep = WorkflowStep.IMPORT,
+                        onStepClick = { step ->
+                            when (step) {
+                                WorkflowStep.IMPORT -> { /* already here */ }
+                                WorkflowStep.NARRATIVE -> onNavigateToCreativeDirection()
+                                WorkflowStep.VOICEOVER, WorkflowStep.PREVIEW, WorkflowStep.EXPORT -> onNavigateToCreativeDirection()
+                            }
+                        }
+                    )
+                }
+
+                item {
                     // Codebase input glass card
                     Box(
                         modifier = Modifier
