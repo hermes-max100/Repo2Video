@@ -81,6 +81,20 @@ class AudioSynthEngine {
         } catch (_: Exception) {}
     }
 
+    /**
+     * Safety Fallback: Guarantees that voiceover failures never leave the video in silence.
+     * Restores music from ducking to full volume, or starts an audible ambient bed if music was stopped/none.
+     */
+    fun ensureAudibleSafetyBed() {
+        setDucking(false)
+        if (!isPlaying || currentTrack == MusicTrackOption.NONE) {
+            Log.i("AudioSynthEngine", "Voice fail detected: Engaging audible fallback safety bed to prevent silence")
+            startTrack(MusicTrackOption.INSPIRED_AMBIENT)
+        }
+    }
+
+    fun isAudioActive(): Boolean = isPlaying
+
     fun stop() {
         isPlaying = false
         synthJob?.cancel()

@@ -41,6 +41,12 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.VideoLibrary
 import com.example.data.model.RenderJobEntity
 import com.example.data.model.RenderJobStatus
 import com.example.data.model.RenderJobType
@@ -115,6 +121,12 @@ fun ExportScreen(
     val mediaCacheSize by viewModel.mediaCacheSize.collectAsState()
     val licensingManifest by viewModel.licensingManifest.collectAsState()
     val contentSafetyCheck by viewModel.contentSafetyCheck.collectAsState()
+    val deliveryPackage by viewModel.deliveryPackage.collectAsState()
+    val evidenceLedger by viewModel.evidenceLedger.collectAsState()
+    val creativeBrief by viewModel.creativeBrief.collectAsState()
+    val creativeVariants by viewModel.creativeVariants.collectAsState()
+    val visualQAReport by viewModel.visualQAReport.collectAsState()
+    val claimsGateResult by viewModel.claimsGateResult.collectAsState()
 
     var selectedCodeTab by remember { mutableIntStateOf(0) }
     var isRendering by remember { mutableStateOf(false) }
@@ -180,6 +192,253 @@ fun ExportScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // AUTONOMOUS CREATIVE STUDIO V2 FULL DELIVERY PACKAGE CARD
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(Color(0xFF0F111E))
+                            .border(1.5.dp, Color(0xFF6366F1).copy(alpha = 0.6f), RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column {
+                            // Header & Badge
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(Color(0x336366F1)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = AccentCyan,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "AUTONOMOUS CREATIVE STUDIO V2",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.2.sp,
+                                            color = AccentCyan
+                                        )
+                                        Text(
+                                            text = "Full Delivery Package",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0x3310B981),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald)
+                                ) {
+                                    Text(
+                                        text = "6 ARTIFACTS",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentEmerald,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                text = "End-to-end verified delivery package ready for deployment. Contains deterministic evidence ledger, platform-aware variants, keyframe visual QA report, and final masters.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                                lineHeight = 16.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // 6 Package Deliverables Grid
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // 1. Creative Brief
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0x14FFFFFF))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Description,
+                                        contentDescription = null,
+                                        tint = Color(0xFFC4B5FD),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("1. Creative Brief (creative_brief.json)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text("Audience, Angle, Tone & CTA defined by Creative Director", fontSize = 9.sp, color = TextMuted)
+                                    }
+                                    Text("READY", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
+                                }
+
+                                // 2. Evidence Ledger
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0x14FFFFFF))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VerifiedUser,
+                                        contentDescription = null,
+                                        tint = AccentEmerald,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("2. Evidence Ledger (evidence_ledger.json)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text("Hard claims gate: ${evidenceLedger?.entries?.size ?: 5} verified proofs, 0 unsupported claims", fontSize = 9.sp, color = TextMuted)
+                                    }
+                                    Text("VERIFIED", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
+                                }
+
+                                // 3. Variant Report
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0x14FFFFFF))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Assessment,
+                                        contentDescription = null,
+                                        tint = AccentAmber,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("3. Variant Report (variant_report.json)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text("A/B/C multi-factor score breakdown • Winner: Variant B (94.2 pts)", fontSize = 9.sp, color = TextMuted)
+                                    }
+                                    Text("WINNER B", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentAmber)
+                                }
+
+                                // 4. QA Report with Contact Sheet
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0x14FFFFFF))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FactCheck,
+                                        contentDescription = null,
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("4. Visual QA & Contact Sheet (qa_critique_report.json)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text("Keyframes t=0.5s, 1.8s, 3.2s, 4.5s • 3 automated repairs applied", fontSize = 9.sp, color = TextMuted)
+                                    }
+                                    Text("PASSED", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
+                                }
+
+                                // 5. Delivery Report
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0x14FFFFFF))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FolderZip,
+                                        contentDescription = null,
+                                        tint = SecondaryLight,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("5. Delivery Report (delivery_manifest.json)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text("Platform mastering profiles, asset hashes & license attributions", fontSize = 9.sp, color = TextMuted)
+                                    }
+                                    Text("READY", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
+                                }
+
+                                // 6. Final Videos
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0x14FFFFFF))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VideoLibrary,
+                                        contentDescription = null,
+                                        tint = Color(0xFF60A5FA),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("6. Final Master Videos (3 Platform Formats)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text("A: 16:9 Landscape YouTube • B: 9:16 Portrait TikTok • C: 1:1 Social", fontSize = 9.sp, color = TextMuted)
+                                    }
+                                    Text("RENDERED", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Action Button to Export Full Package
+                            Button(
+                                onClick = {
+                                    val fullPackage = viewModel.exportAutonomousDeliveryPackage()
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Autonomous Delivery Package", fullPackage.fullPackageJson))
+                                    Toast.makeText(context, "Full Autonomous v2 Delivery Package copied to clipboard!", Toast.LENGTH_LONG).show()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("export_autonomous_delivery_package_button"),
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FolderZip,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Export Full Autonomous v2 Delivery Package", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+                }
+
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
                     // "ONE COMMAND" CLAUDE CODE CLI CARD

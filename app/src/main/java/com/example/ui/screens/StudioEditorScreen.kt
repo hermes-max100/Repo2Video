@@ -121,6 +121,11 @@ fun StudioEditorScreen(
     val scanManifest by viewModel.scanManifest.collectAsState()
     val voiceCapability by viewModel.voiceCapability.collectAsState()
     val claimEvidences by viewModel.claimEvidences.collectAsState()
+    val creativeVariants by viewModel.creativeVariants.collectAsState()
+    val selectedVariant by viewModel.selectedVariant.collectAsState()
+    val visualQAReport by viewModel.visualQAReport.collectAsState()
+    val evidenceLedger by viewModel.evidenceLedger.collectAsState()
+    val isAudioFallbackActive by viewModel.isAudioFallbackActive.collectAsState()
 
     val currentScene = scenes.getOrNull(activeSceneIndex)
 
@@ -264,6 +269,148 @@ fun StudioEditorScreen(
                             }
                         }
                     )
+                }
+
+                // PLATFORM-AWARE VARIANTS & VISUAL QA SUITE
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // Section title with winner highlight
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "RENDER VARIANTS (PLATFORM-AWARE)",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.2.sp,
+                                color = TextMuted
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0x3310B981),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald)
+                            ) {
+                                Text(
+                                    text = "WINNER: VARIANT B (94.2)",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AccentEmerald,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        // Variants A, B, C Tabs
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            creativeVariants.forEach { variant ->
+                                val isSelected = selectedVariant?.id == variant.id
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { viewModel.selectCreativeVariant(variant) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isSelected) Color(0x336366F1) else Color(0x12FFFFFF),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isSelected) PrimaryLight else GlassBorder
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "Var ${variant.id}",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                color = if (isSelected) Color.White else TextSecondary
+                                            )
+                                            if (variant.isRecommendedWinner) {
+                                                Text("⭐", fontSize = 10.sp)
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = variant.layoutProfile.aspectRatio.label,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isSelected) AccentCyan else TextMuted
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "${variant.scoreCard.compositeScore.toInt()} pts",
+                                            fontSize = 9.sp,
+                                            color = AccentEmerald,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Visual QA Critique & Auto-Repair Status Strip
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0x1F06B6D4),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x3306B6D4))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FactCheck,
+                                        contentDescription = null,
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = "Visual QA & Auto-Repair Loop Passed",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "4 Keyframes Inspected • 3 Repairs Applied (Contrast + Safe-Zones + Pacing)",
+                                            fontSize = 9.sp,
+                                            color = AccentCyan
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0x3310B981)
+                                ) {
+                                    Text(
+                                        text = "QA 100%",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentEmerald,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 item {

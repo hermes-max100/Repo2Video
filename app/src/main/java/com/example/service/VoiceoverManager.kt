@@ -28,7 +28,8 @@ class VoiceoverManager(
     private val onSpeechStart: (String) -> Unit = {},
     private val onSpeechDone: (String) -> Unit = {},
     private val onWordHighlight: (String, Int, Int) -> Unit = { _, _, _ -> },
-    private val onSpeechDuration: (String, Long) -> Unit = { _, _ -> }
+    private val onSpeechDuration: (String, Long) -> Unit = { _, _ -> },
+    private val onSpeechFailed: (String, String) -> Unit = { _, _ -> }
 ) {
 
     val elevenLabsService = ElevenLabsVoiceService(context)
@@ -70,7 +71,10 @@ class VoiceoverManager(
             }
 
             override fun onError(utteranceId: String?) {
-                utteranceId?.let { onSpeechDone(it) }
+                utteranceId?.let {
+                    onSpeechFailed(it, "Android TTS playback error")
+                    onSpeechDone(it)
+                }
             }
 
             override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
@@ -146,6 +150,7 @@ class VoiceoverManager(
                 }
                 setOnErrorListener { _, what, extra ->
                     Log.e("VoiceoverManager", "MediaPlayer playback error: what=$what, extra=$extra")
+                    onSpeechFailed(utteranceId, "MediaPlayer playback error code $what")
                     onSpeechDone(utteranceId)
                     true
                 }
@@ -153,6 +158,7 @@ class VoiceoverManager(
             }
         } catch (e: Exception) {
             Log.e("VoiceoverManager", "Failed to start MediaPlayer for ${audioFile.name}", e)
+            onSpeechFailed(utteranceId, "MediaPlayer start exception: ${e.message}")
             onSpeechDone(utteranceId)
         }
     }
@@ -164,16 +170,25 @@ class VoiceoverManager(
         utteranceId: String
     ) {
         val action: () -> Unit = {
-            val calculatedPitch = (voiceActor.basePitch * emotionalPreset.pitchMultiplier).coerceIn(0.5f, 2.0f)
-            val calculatedRate = (voiceActor.baseRate * emotionalPreset.rateMultiplier).coerceIn(0.5f, 2.0f)
+            try {
+                val calculatedPitch = (voiceActor.basePitch * emotionalPreset.pitchMultiplier).coerceIn(0.5f, 2.0f)
+                val calculatedRate = (voiceActor.baseRate * emotionalPreset.rateMultiplier).coerceIn(0.5f, 2.0f)
 
-            tts?.setPitch(calculatedPitch)
-            tts?.setSpeechRate(calculatedRate)
+                tts?.setPitch(calculatedPitch)
+                tts?.setSpeechRate(calculatedRate)
 
-            val params = Bundle()
-            params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
-            Unit
+                val params = Bundle()
+                params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+                val res = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+                if (res == TextToSpeech.ERROR) {
+                    onSpeechFailed(utteranceId, "TTS Engine returned ERROR code")
+                    onSpeechDone(utteranceId)
+                }
+            } catch (e: Exception) {
+                Log.e("VoiceoverManager", "TTS speak execution failed", e)
+                onSpeechFailed(utteranceId, "TTS execution error: ${e.message}")
+                onSpeechDone(utteranceId)
+            }
         }
 
         if (isTtsInitialized) {

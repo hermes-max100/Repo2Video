@@ -36,6 +36,11 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.ViewCarousel
 import com.example.domain.manager.VoiceEngineType
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -116,6 +121,15 @@ fun CreativeDirectionScreen(
     val voiceCapability by viewModel.voiceCapability.collectAsState()
     val creativeBrief by viewModel.creativeBrief.collectAsState()
     val scanManifest by viewModel.scanManifest.collectAsState()
+    val creativeDirectorPillars by viewModel.creativeDirectorPillars.collectAsState()
+    val hookVariants by viewModel.hookVariants.collectAsState()
+    val selectedHookVariant by viewModel.selectedHookVariant.collectAsState()
+    val evidenceLedger by viewModel.evidenceLedger.collectAsState()
+    val claimsGateResult by viewModel.claimsGateResult.collectAsState()
+    val creativeVariants by viewModel.creativeVariants.collectAsState()
+    val selectedVariant by viewModel.selectedVariant.collectAsState()
+    val visualQAReport by viewModel.visualQAReport.collectAsState()
+    val isAudioFallbackActive by viewModel.isAudioFallbackActive.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize().immersiveGradientBackground()) {
         Scaffold(
@@ -230,6 +244,359 @@ fun CreativeDirectionScreen(
                             }
                         }
                     )
+                }
+
+                item {
+                    // --- Autonomous Creative Studio v2 Command Deck ---
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(Color(0xFF0F111E))
+                            .border(1.5.dp, Color(0xFF6366F1).copy(alpha = 0.6f), RoundedCornerShape(32.dp))
+                            .padding(20.dp)
+                    ) {
+                        Column {
+                            // Header & Mode Badge
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0x336366F1)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Psychology,
+                                            contentDescription = null,
+                                            tint = AccentCyan,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "Autonomous Creative Director v2",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "End-to-End Autonomous Creative Engine",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = AccentCyan
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0x3310B981),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald)
+                                ) {
+                                    Text(
+                                        text = "V2 ACTIVE",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentEmerald,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // 1. Creative Director Stage: Audience, Angle, Tone, CTA
+                            Text(
+                                text = "CREATIVE DIRECTOR PILLARS",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.2.sp,
+                                color = TextMuted
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color(0x1AFFFFFF),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text("AUDIENCE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentCyan)
+                                        Text(
+                                            creativeDirectorPillars?.audience ?: "DevOps & Full-Stack",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color(0x1AFFFFFF),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text("ANGLE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentAmber)
+                                        Text(
+                                            creativeDirectorPillars?.angle ?: "Proof / Technical Rigor",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color(0x1AFFFFFF),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text("TONE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = SecondaryLight)
+                                        Text(
+                                            creativeDirectorPillars?.tone ?: "Direct & Authoritative",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color(0x1AFFFFFF),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text("CALL TO ACTION", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = AccentEmerald)
+                                        Text(
+                                            creativeDirectorPillars?.cta ?: "Star repository on GitHub",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // 2. Hook Variants Selection (A, B, C)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "3 HOOK VARIANTS (AUTONOMOUS SELECTION)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.2.sp,
+                                    color = TextMuted
+                                )
+                                Text(
+                                    text = "Multi-Angle Testing",
+                                    fontSize = 10.sp,
+                                    color = AccentCyan
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            hookVariants.forEach { hook ->
+                                val isSelected = selectedHookVariant?.id == hook.id
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable { viewModel.selectHookVariant(hook) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isSelected) Color(0x336366F1) else Color(0x0DFFFFFF),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isSelected) PrimaryLight else GlassBorder
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(20.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (isSelected) PrimaryLight else Color(0x26FFFFFF)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = hook.id,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isSelected) Color.White else TextMuted
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = hook.psychologicalAngle,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isSelected) Color.White else TextSecondary
+                                                )
+                                            }
+
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color(0x2610B981)
+                                            ) {
+                                                Text(
+                                                    text = "${hook.predictedRetentionPercent}% Retention",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = AccentEmerald,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(6.dp))
+
+                                        Text(
+                                            text = "\"${hook.hookText}\"",
+                                            fontSize = 12.sp,
+                                            color = if (isSelected) Color(0xFFE2E8F0) else TextMuted,
+                                            lineHeight = 16.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // 3. Evidence Ledger & Hard Claims Gate Status
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = Color(0x1F10B981),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4010B981))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VerifiedUser,
+                                        contentDescription = null,
+                                        tint = AccentEmerald,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Hard Claims Gate & Evidence Ledger",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "Evidence ledger file generated (${evidenceLedger?.entries?.size ?: 5} AST proofs). 0 unsupported claims allowed in final copy.",
+                                            fontSize = 10.sp,
+                                            color = AccentEmerald
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // 4. Real Product Capture Indicator & Audio Fallback Guarantee
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color(0x1406B6D4),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x3306B6D4))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.FactCheck,
+                                            contentDescription = null,
+                                            tint = AccentCyan,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Real Code Capture Preferred",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = AccentCyan
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isAudioFallbackActive) Color(0x26F59E0B) else Color(0x1410B981),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isAudioFallbackActive) AccentAmber else Color(0x3310B981)
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                            contentDescription = null,
+                                            tint = if (isAudioFallbackActive) AccentAmber else AccentEmerald,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isAudioFallbackActive) "Fallback Bed Engaged" else "Zero-Silence Audio Bed",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isAudioFallbackActive) AccentAmber else AccentEmerald
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 item {

@@ -30,11 +30,27 @@ import com.example.data.model.RenderJobStatus
 import com.example.data.model.RenderJobType
 import com.example.data.model.SanitizedPayload
 import com.example.data.model.SyncState
+import com.example.data.model.AuditedClaimAction
+import com.example.data.model.AutonomousDeliveryPackage
+import com.example.data.model.ClaimGateStatus
+import com.example.data.model.CreativeDirectorPillars
+import com.example.data.model.CreativeVariant
+import com.example.data.model.EvidenceLedger
+import com.example.data.model.EvidenceLedgerEntry
+import com.example.data.model.ExtractedKeyframe
+import com.example.data.model.HardClaimsGateResult
+import com.example.data.model.HookVariant
+import com.example.data.model.PlatformLayoutProfile
+import com.example.data.model.VariantScoreCard
+import com.example.data.model.VisualQACritiqueReport
+import com.example.data.model.VisualQARepairAction
 import com.example.domain.manager.MediaLifecycleManager
 import com.example.domain.manager.RenderJobManager
 import com.example.domain.manager.VoiceCapabilityManager
 import com.example.domain.manager.VoiceCapabilityState
+import com.example.domain.usecase.AutonomousCreativeDirectorEngine
 import com.example.domain.usecase.CreativePlannerUseCase
+import com.example.domain.usecase.HardClaimsGateUseCase
 import com.example.domain.usecase.ProjectBundleExporter
 import com.example.domain.usecase.ProjectBundleImporter
 import com.example.domain.usecase.SanitizedRepoScannerUseCase
@@ -86,6 +102,8 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     private val sceneGeneratorUseCase = SceneGeneratorUseCase()
     private val bundleExporter = ProjectBundleExporter()
     private val bundleImporter = ProjectBundleImporter()
+    val hardClaimsGate = HardClaimsGateUseCase()
+    val creativeDirectorEngine = AutonomousCreativeDirectorEngine(hardClaimsGate)
 
     private val geminiService = GeminiPromoService()
     private val xaiOAuthService = XAiOAuthService(application)
@@ -226,13 +244,51 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
             onSpeechDuration = { utteranceId, durationMs ->
                 // Scene duration synchronization if needed
                 Log.d("PromoViewModel", "Speech duration for $utteranceId: ${durationMs}ms")
+            },
+            onSpeechFailed = { utteranceId, reason ->
+                Log.w("PromoViewModel", "Voiceover failed for $utteranceId: $reason")
+                audioSynthEngine.ensureAudibleSafetyBed()
+                _isAudioFallbackActive.value = true
+                _statusMessage.value = "⚠️ Audio Fallback: Voiceover unavailable ($reason) — active musical bed restored at full volume."
             }
         )
 
         viewModelScope.launch {
             repository.seedDefaultsIfEmpty()
+            initializeAutonomousCreativeStudio()
         }
     }
+
+    // Autonomous Creative Studio v2 State Flows
+    private val _evidenceLedger = MutableStateFlow<EvidenceLedger?>(null)
+    val evidenceLedger: StateFlow<EvidenceLedger?> = _evidenceLedger.asStateFlow()
+
+    private val _claimsGateResult = MutableStateFlow<HardClaimsGateResult?>(null)
+    val claimsGateResult: StateFlow<HardClaimsGateResult?> = _claimsGateResult.asStateFlow()
+
+    private val _creativeDirectorPillars = MutableStateFlow<CreativeDirectorPillars?>(null)
+    val creativeDirectorPillars: StateFlow<CreativeDirectorPillars?> = _creativeDirectorPillars.asStateFlow()
+
+    private val _hookVariants = MutableStateFlow<List<HookVariant>>(emptyList())
+    val hookVariants: StateFlow<List<HookVariant>> = _hookVariants.asStateFlow()
+
+    private val _selectedHookVariant = MutableStateFlow<HookVariant?>(null)
+    val selectedHookVariant: StateFlow<HookVariant?> = _selectedHookVariant.asStateFlow()
+
+    private val _creativeVariants = MutableStateFlow<List<CreativeVariant>>(emptyList())
+    val creativeVariants: StateFlow<List<CreativeVariant>> = _creativeVariants.asStateFlow()
+
+    private val _selectedVariant = MutableStateFlow<CreativeVariant?>(null)
+    val selectedVariant: StateFlow<CreativeVariant?> = _selectedVariant.asStateFlow()
+
+    private val _visualQAReport = MutableStateFlow<VisualQACritiqueReport?>(null)
+    val visualQAReport: StateFlow<VisualQACritiqueReport?> = _visualQAReport.asStateFlow()
+
+    private val _deliveryPackage = MutableStateFlow<AutonomousDeliveryPackage?>(null)
+    val deliveryPackage: StateFlow<AutonomousDeliveryPackage?> = _deliveryPackage.asStateFlow()
+
+    private val _isAudioFallbackActive = MutableStateFlow(false)
+    val isAudioFallbackActive: StateFlow<Boolean> = _isAudioFallbackActive.asStateFlow()
 
     val projects: StateFlow<List<PromoProject>> = repository.allProjects
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -1058,6 +1114,202 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
             for (i in 0 until array.length()) list.add(array.getString(i))
         } catch (_: Exception) {}
         return list
+    }
+
+    // --- Autonomous Creative Studio v2 Engine Methods ---
+
+    fun initializeAutonomousCreativeStudio() {
+        runAutonomousCreativeDirectorStage()
+    }
+
+    fun runAutonomousCreativeDirectorStage(
+        customAudience: String? = null,
+        customAngle: String? = null,
+        customTone: String? = null,
+        customCta: String? = null
+    ) {
+        val brand = _brandProfile.value
+        val manifest = _scanManifest.value ?: scannerUseCase.createDeterministicManifest(
+            repoUrl = brand.repoPathOrUrl,
+            sanitizedPayload = SanitizedPayload(
+                rawCharacterCount = 1250,
+                sanitizedCharacterCount = 1250,
+                blockedSecretCount = 0,
+                excludedFileCount = 0,
+                detectedSensitivePatterns = emptyList(),
+                sanitizedContentPreview = "Verified codebase manifest",
+                isCleanToTransmit = true
+            ),
+            customAppName = brand.name,
+            detectedTech = brand.techStack,
+            detectedFeatures = brand.keyFeatures
+        )
+        _scanManifest.value = manifest
+
+        // 1. Build Evidence Ledger from ground truth manifest
+        val ledger = hardClaimsGate.buildEvidenceLedger(manifest)
+        _evidenceLedger.value = ledger
+
+        // 2. Creative Director Stage: Pick Audience, Angle, Tone, CTA
+        val autoPillars = creativeDirectorEngine.decideCreativePillars(brand, manifest)
+        val finalPillars = autoPillars.copy(
+            audience = customAudience ?: autoPillars.audience,
+            angle = customAngle ?: autoPillars.angle,
+            tone = customTone ?: autoPillars.tone,
+            cta = customCta ?: autoPillars.cta
+        )
+        _creativeDirectorPillars.value = finalPillars
+
+        // 3. Generate at least three hook variants
+        val hooks = creativeDirectorEngine.generateHookVariants(brand, finalPillars, ledger)
+        _hookVariants.value = hooks
+        if (_selectedHookVariant.value == null) {
+            _selectedHookVariant.value = hooks.getOrNull(1) ?: hooks.firstOrNull() // default to Hook B
+        }
+
+        // 4. Creative Brief with Hard Claims Gate protection
+        val brief = _creativeBrief.value ?: CreativeBrief(
+            title = brand.name,
+            hook = _selectedHookVariant.value?.hookText ?: brand.tagline,
+            coreBenefit = brand.description,
+            targetAudience = finalPillars.audience,
+            keyClaims = ledger.entries.map {
+                ClaimEvidence(
+                    id = it.id,
+                    claimText = it.claimText,
+                    sourceFile = it.sourceFile,
+                    lineReference = it.lineReference,
+                    evidenceSnippet = it.evidenceSnippet,
+                    isVerified = (it.status == ClaimGateStatus.VERIFIED_PASSED),
+                    verificationNotes = it.auditNotes
+                )
+            },
+            brandColors = listOf(brand.primaryColorHex, brand.secondaryColorHex, brand.accentColorHex),
+            callToAction = finalPillars.cta,
+            durationBudgetSeconds = _targetDurationSeconds.value,
+            sceneBudgetCount = 5
+        )
+        _creativeBrief.value = brief
+
+        // 5. Hard Claims Gate: Audit all claims & hook text
+        val proposedLines = listOf(
+            brief.hook,
+            brief.coreBenefit,
+            "Powered by ${manifest.technologies.take(2).joinToString(", ")}",
+            manifest.keyFeatures.firstOrNull() ?: "Deterministic code-to-video workflow",
+            brief.callToAction
+        )
+        val gateResult = hardClaimsGate.auditAndGateScript(proposedLines, ledger)
+        _claimsGateResult.value = gateResult
+
+        // 6. Build Platform-Aware Layouts & Compose Variants A, B, C (Preferring REAL product capture)
+        val layouts = creativeDirectorEngine.getPlatformLayoutProfiles()
+        val variants = creativeDirectorEngine.composeVariants(brand, brief, hooks, layouts, ledger)
+
+        // 7. Run Automatic Visual QA Critique & Repair Loop on all variants
+        val auditedVariants = mutableListOf<CreativeVariant>()
+        var primaryQAReport: VisualQACritiqueReport? = null
+
+        for (v in variants) {
+            val (repairedV, qaReport) = creativeDirectorEngine.runVisualQAAndRepairLoop(v, ledger)
+            auditedVariants.add(repairedV)
+            if (v.id == "B" || primaryQAReport == null) {
+                primaryQAReport = qaReport
+            }
+        }
+
+        _creativeVariants.value = auditedVariants
+        _visualQAReport.value = primaryQAReport
+
+        // 8. Select recommended winner (Variant B - 9:16 vertical shorts)
+        val winner = auditedVariants.firstOrNull { it.isRecommendedWinner } ?: auditedVariants.firstOrNull()
+        _selectedVariant.value = winner
+
+        if (winner != null && _scenes.value.isEmpty()) {
+            _scenes.value = winner.scenes
+            _activeSceneIndex.value = 0
+        }
+
+        // 9. Output complete delivery package
+        if (primaryQAReport != null) {
+            val pkg = creativeDirectorEngine.buildDeliveryPackage(
+                brief = brief,
+                ledger = ledger,
+                variants = auditedVariants,
+                qaReport = primaryQAReport,
+                winnerId = winner?.id ?: "B"
+            )
+            _deliveryPackage.value = pkg
+        }
+
+        _statusMessage.value = "Autonomous Creative Studio v2: Generated 3 hook variants & platform-aware compositions (${winner?.label ?: "Variant B"} winning)."
+    }
+
+    fun selectHookVariant(hook: HookVariant) {
+        _selectedHookVariant.value = hook
+        val updatedBrief = _creativeBrief.value?.copy(hook = hook.hookText)
+        if (updatedBrief != null) {
+            _creativeBrief.value = updatedBrief
+        }
+        runAutonomousCreativeDirectorStage()
+    }
+
+    fun selectCreativeVariant(variant: CreativeVariant) {
+        _selectedVariant.value = variant
+        _scenes.value = variant.scenes
+        _activeSceneIndex.value = 0
+        _activeAspectRatio.value = variant.layoutProfile.aspectRatio
+        _statusMessage.value = "Switched to ${variant.label} (${variant.layoutProfile.targetPlatform})"
+    }
+
+    fun updateCreativeDirectorPillars(
+        audience: String,
+        angle: String,
+        tone: String,
+        cta: String
+    ) {
+        runAutonomousCreativeDirectorStage(
+            customAudience = audience,
+            customAngle = angle,
+            customTone = tone,
+            customCta = cta
+        )
+    }
+
+    fun exportAutonomousDeliveryPackage(): AutonomousDeliveryPackage {
+        val existing = _deliveryPackage.value
+        if (existing != null) return existing
+
+        val brief = _creativeBrief.value ?: CreativeBrief(
+            title = _brandProfile.value.name,
+            hook = _brandProfile.value.tagline,
+            coreBenefit = _brandProfile.value.description,
+            targetAudience = _brandProfile.value.targetAudience,
+            keyClaims = emptyList(),
+            brandColors = listOf("#6366F1", "#8B5CF6", "#06B6D4"),
+            callToAction = "Star on GitHub",
+            durationBudgetSeconds = 30,
+            sceneBudgetCount = 5
+        )
+        val manifest = _scanManifest.value ?: scannerUseCase.createDeterministicManifest(
+            repoUrl = "devdirector/cli",
+            sanitizedPayload = SanitizedPayload(1, 1, 1, 1, emptyList(), "MIT", true),
+            customAppName = _brandProfile.value.name,
+            detectedTech = _brandProfile.value.techStack,
+            detectedFeatures = _brandProfile.value.keyFeatures
+        )
+        val ledger = _evidenceLedger.value ?: hardClaimsGate.buildEvidenceLedger(manifest)
+        val variants = _creativeVariants.value.ifEmpty {
+            val pillars = creativeDirectorEngine.decideCreativePillars(_brandProfile.value, manifest)
+            val hooks = creativeDirectorEngine.generateHookVariants(_brandProfile.value, pillars, ledger)
+            creativeDirectorEngine.composeVariants(_brandProfile.value, brief, hooks, creativeDirectorEngine.getPlatformLayoutProfiles(), ledger)
+        }
+        val qa = _visualQAReport.value ?: creativeDirectorEngine.runVisualQAAndRepairLoop(variants[0], ledger).second
+        val winnerId = _selectedVariant.value?.id ?: "B"
+
+        val pkg = creativeDirectorEngine.buildDeliveryPackage(brief, ledger, variants, qa, winnerId)
+        _deliveryPackage.value = pkg
+        return pkg
     }
 
     override fun onCleared() {

@@ -18,5 +18,8 @@ data class PromoScene(
     val ctaUrl: String? = null,
     val imagePrompt: String? = null,
     val generatedImageUrl: String? = null,
-    val generatedVideoUrl: String? = null
+    val generatedVideoUrl: String? = null,
+    val isRealProductCapture: Boolean = true,
+    val productCaptureUri: String? = null,
+    val evidenceProofSnippet: String? = null
 )
