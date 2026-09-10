@@ -14,6 +14,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Local JVM tests verifying the Autonomous Creative Studio v2 upgrade requirements:
@@ -27,6 +30,8 @@ import org.junit.Test
  * 8. Variant scoring & recommended winner selection.
  * 9. Full package export (brief, ledger, variant report, QA report with contact sheet, delivery report, final videos).
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 class AutonomousCreativeStudioV2Test {
 
     private val hardClaimsGate = HardClaimsGateUseCase()
@@ -224,8 +229,8 @@ class AutonomousCreativeStudioV2Test {
         assertTrue(pkg.variantReportJson.contains("variants"))
         assertTrue(pkg.qaReportWithContactSheetJson.contains("keyframes"))
         assertTrue(pkg.deliveryReportJson.contains("master_artifacts"))
-        assertTrue(pkg.finalVideosSummary.contains("16:9 Landscape"))
-        assertTrue(pkg.finalVideosSummary.contains("9:16 Portrait"))
+        assertTrue(pkg.finalVideosSummary.contains("Landscape 16:9"))
+        assertTrue(pkg.finalVideosSummary.contains("Portrait 9:16"))
         assertTrue(pkg.fullPackageJson.isNotBlank())
     }
 

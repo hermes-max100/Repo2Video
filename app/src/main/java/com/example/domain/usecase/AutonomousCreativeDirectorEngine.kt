@@ -556,6 +556,18 @@ class AutonomousCreativeDirectorEngine(
                 })
             }
             put("repairs", repArr)
+            val kfArr = JSONArray()
+            for (kf in qaReport.keyframes) {
+                kfArr.put(JSONObject().apply {
+                    put("sceneIndex", kf.sceneIndex)
+                    put("timestampSeconds", kf.timestampSeconds)
+                    put("frameLabel", kf.frameLabel)
+                    put("textContrastRatio", kf.textContrastRatio)
+                    put("safeZoneCompliance", kf.safeZoneCompliance)
+                    put("isRealProductCapture", kf.isRealProductCapture)
+                })
+            }
+            put("keyframes", kfArr)
             put("contactSheet", qaReport.contactSheetSummary)
         }.toString(2)
 
@@ -565,6 +577,7 @@ class AutonomousCreativeDirectorEngine(
             put("exportedAt", System.currentTimeMillis())
             put("status", "COMMERCIAL_USE_READY")
             put("audioEngine", "Dual-Engine with Guaranteed Non-Silence Fallback")
+            put("master_artifacts", variants.map { "variant_${it.id.lowercase()}_${it.layoutProfile.aspectRatio.name.lowercase()}.mp4" })
             put("videoRendersReady", variants.map { "variant_${it.id.lowercase()}_${it.layoutProfile.aspectRatio.name.lowercase()}.mp4" })
             put("checksumSha256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
         }.toString(2)
