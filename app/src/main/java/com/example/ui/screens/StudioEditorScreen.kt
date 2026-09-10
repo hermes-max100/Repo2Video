@@ -29,6 +29,9 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
@@ -109,6 +112,7 @@ fun StudioEditorScreen(
     onOpenDirectorChat: () -> Unit
 ) {
     val brandProfile by viewModel.brandProfile.collectAsState()
+    val context = LocalContext.current
     val scenes by viewModel.scenes.collectAsState()
     val activeSceneIndex by viewModel.activeSceneIndex.collectAsState()
     val activeFormat by viewModel.activeAspectRatio.collectAsState()
@@ -223,27 +227,52 @@ fun StudioEditorScreen(
                             )
                         }
 
-                        Button(
-                            onClick = onNavigateToExport,
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.testTag("export_promo_button")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.FileUpload,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = Color.White
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Export & Render", fontWeight = FontWeight.Bold, color = Color.White)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = Color.White
-                            )
+                            Surface(
+                                onClick = {
+                                    viewModel.downloadPromoVideo(aspectRatio = activeFormat)
+                                    Toast.makeText(context, "Saving ${activeFormat.label} video to local storage...", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0x2210B981),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x6610B981)),
+                                modifier = Modifier.size(42.dp).testTag("quick_download_editor_button")
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = "Save video to local storage",
+                                        tint = AccentEmerald,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = onNavigateToExport,
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.testTag("export_promo_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FileUpload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Export & Render", fontWeight = FontWeight.Bold, color = Color.White)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                 }

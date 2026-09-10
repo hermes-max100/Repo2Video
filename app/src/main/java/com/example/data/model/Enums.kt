@@ -213,7 +213,10 @@ enum class AspectRatioFormat(
     val aspectFloat: Float
 ) {
     LANDSCAPE_16_9("16:9", "Landscape (1920 × 1080) - YouTube & Web", 1920, 1080, 16f / 9f),
-    PORTRAIT_9_16("9:16", "Portrait (1080 × 1920) - TikTok, Reels, Shorts", 1080, 1920, 9f / 16f)
+    PORTRAIT_9_16("9:16", "Portrait (1080 × 1920) - TikTok, Reels, Shorts", 1080, 1920, 9f / 16f),
+    SQUARE_1_1("1:1", "Square (1080 × 1080) - Feed & Carousel", 1080, 1080, 1.0f);
+
+    val displayName: String get() = label
 }
 
 enum class SceneVisualType(

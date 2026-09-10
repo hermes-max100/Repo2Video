@@ -58,6 +58,13 @@ import com.example.domain.usecase.SceneGeneratorUseCase
 import com.example.domain.usecase.ScriptwriterUseCase
 import com.example.util.UrlValidator
 import com.example.service.AudioSynthEngine
+import android.content.Intent
+import com.example.data.model.DownloadDestination
+import com.example.data.model.VideoDownloadResult
+import com.example.data.model.VideoDownloadState
+import com.example.data.model.VideoDownloadStatus
+import com.example.data.model.VideoQuality
+import com.example.domain.manager.LocalVideoDownloadManager
 import com.example.service.FirebasePromoSync
 import com.example.service.GeminiPromoService
 import com.example.service.GoogleAuthState
@@ -289,6 +296,150 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isAudioFallbackActive = MutableStateFlow(false)
     val isAudioFallbackActive: StateFlow<Boolean> = _isAudioFallbackActive.asStateFlow()
+
+    // Video Download to Local Device Storage
+    val videoDownloadManager = LocalVideoDownloadManager(application)
+
+    private val _videoDownloadState = MutableStateFlow(VideoDownloadState())
+    val videoDownloadState: StateFlow<VideoDownloadState> = _videoDownloadState.asStateFlow()
+
+    private val _selectedDownloadQuality = MutableStateFlow(VideoQuality.FHD_1080P)
+    val selectedDownloadQuality: StateFlow<VideoQuality> = _selectedDownloadQuality.asStateFlow()
+
+    fun setDownloadQuality(quality: VideoQuality) {
+        _selectedDownloadQuality.value = quality
+    }
+
+    private val _selectedDownloadDestination = MutableStateFlow(DownloadDestination.MOVIES)
+    val selectedDownloadDestination: StateFlow<DownloadDestination> = _selectedDownloadDestination.asStateFlow()
+
+    fun setDownloadDestination(dest: DownloadDestination) {
+        _selectedDownloadDestination.value = dest
+    }
+
+    private val _downloadedVideos = MutableStateFlow<List<VideoDownloadResult>>(emptyList())
+    val downloadedVideos: StateFlow<List<VideoDownloadResult>> = _downloadedVideos.asStateFlow()
+
+    fun downloadPromoVideo(
+        aspectRatio: AspectRatioFormat = _activeAspectRatio.value,
+        quality: VideoQuality = _selectedDownloadQuality.value,
+        destination: DownloadDestination = _selectedDownloadDestination.value,
+        customBaseName: String? = null
+    ) {
+        viewModelScope.launch {
+            _videoDownloadState.value = VideoDownloadState(
+                status = VideoDownloadStatus.PREPARING,
+                progressPercent = 5,
+                stageMessage = "Initializing download pipeline for ${aspectRatio.displayName}..."
+            )
+            val currentScenes = _scenes.value
+            val brand = _brandProfile.value
+
+            val result = videoDownloadManager.saveVideoToDeviceStorage(
+                brand = brand,
+                scenes = currentScenes,
+                aspectRatio = aspectRatio,
+                quality = quality,
+                destination = destination,
+                customBaseName = customBaseName,
+                onProgress = { pct, stage ->
+                    val status = when {
+                        pct < 30 -> VideoDownloadStatus.RENDERING_FRAMES
+                        pct < 65 -> VideoDownloadStatus.ENCODING_VIDEO
+                        pct < 85 -> VideoDownloadStatus.SYNCHRONIZING_AUDIO
+                        else -> VideoDownloadStatus.SAVING_TO_STORAGE
+                    }
+                    _videoDownloadState.value = _videoDownloadState.value.copy(
+                        status = status,
+                        progressPercent = pct,
+                        stageMessage = stage
+                    )
+                }
+            )
+
+            if (result.success) {
+                _videoDownloadState.value = VideoDownloadState(
+                    status = VideoDownloadStatus.COMPLETED,
+                    progressPercent = 100,
+                    stageMessage = "Saved to ${result.localPath} (${result.formattedSize})",
+                    activeFileName = result.fileName,
+                    result = result
+                )
+                _downloadedVideos.value = listOf(result) + _downloadedVideos.value
+                _statusMessage.value = "Promo video saved to device storage: ${result.fileName}"
+            } else {
+                _videoDownloadState.value = VideoDownloadState(
+                    status = VideoDownloadStatus.FAILED,
+                    progressPercent = 0,
+                    stageMessage = "Download failed: ${result.errorMessage}",
+                    errorMessage = result.errorMessage
+                )
+                _statusMessage.value = "Failed to save promo video: ${result.errorMessage}"
+            }
+        }
+    }
+
+    fun downloadAllVideoFormats(
+        quality: VideoQuality = _selectedDownloadQuality.value,
+        destination: DownloadDestination = _selectedDownloadDestination.value
+    ) {
+        viewModelScope.launch {
+            _videoDownloadState.value = VideoDownloadState(
+                status = VideoDownloadStatus.PREPARING,
+                progressPercent = 5,
+                stageMessage = "Initializing multi-format video download..."
+            )
+            val currentScenes = _scenes.value
+            val brand = _brandProfile.value
+
+            val results = videoDownloadManager.saveAllFormatsToDeviceStorage(
+                brand = brand,
+                scenes = currentScenes,
+                quality = quality,
+                destination = destination,
+                onProgress = { overallPct, stage ->
+                    _videoDownloadState.value = _videoDownloadState.value.copy(
+                        status = VideoDownloadStatus.ENCODING_VIDEO,
+                        progressPercent = overallPct,
+                        stageMessage = stage
+                    )
+                }
+            )
+
+            val successful = results.filter { it.success }
+            if (successful.isNotEmpty()) {
+                val last = successful.last()
+                _videoDownloadState.value = VideoDownloadState(
+                    status = VideoDownloadStatus.COMPLETED,
+                    progressPercent = 100,
+                    stageMessage = "All ${successful.size} video formats saved to ${destination.displayName}!",
+                    activeFileName = "${successful.size} Video Formats",
+                    result = last
+                )
+                _downloadedVideos.value = successful + _downloadedVideos.value
+                _statusMessage.value = "Saved ${successful.size} video formats to device storage!"
+            } else {
+                _videoDownloadState.value = VideoDownloadState(
+                    status = VideoDownloadStatus.FAILED,
+                    progressPercent = 0,
+                    stageMessage = "All downloads failed.",
+                    errorMessage = "Failed to save formats to local storage."
+                )
+            }
+        }
+    }
+
+    fun clearDownloadState() {
+        _videoDownloadState.value = VideoDownloadState()
+    }
+
+    fun createOpenVideoIntent(result: VideoDownloadResult): Intent {
+        return videoDownloadManager.createOpenVideoIntent(result)
+    }
+
+    fun createShareVideoIntent(result: VideoDownloadResult): Intent {
+        return videoDownloadManager.createShareVideoIntent(result)
+    }
 
     val projects: StateFlow<List<PromoProject>> = repository.allProjects
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

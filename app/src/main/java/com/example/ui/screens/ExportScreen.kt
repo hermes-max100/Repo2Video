@@ -47,6 +47,8 @@ import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Download
+import com.example.ui.components.VideoDownloadCard
 import com.example.data.model.RenderJobEntity
 import com.example.data.model.RenderJobStatus
 import com.example.data.model.RenderJobType
@@ -127,6 +129,10 @@ fun ExportScreen(
     val creativeVariants by viewModel.creativeVariants.collectAsState()
     val visualQAReport by viewModel.visualQAReport.collectAsState()
     val claimsGateResult by viewModel.claimsGateResult.collectAsState()
+    val videoDownloadState by viewModel.videoDownloadState.collectAsState()
+    val selectedDownloadQuality by viewModel.selectedDownloadQuality.collectAsState()
+    val selectedDownloadDestination by viewModel.selectedDownloadDestination.collectAsState()
+    val downloadedVideos by viewModel.downloadedVideos.collectAsState()
 
     var selectedCodeTab by remember { mutableIntStateOf(0) }
     var isRendering by remember { mutableStateOf(false) }
@@ -777,17 +783,50 @@ fun ExportScreen(
                                         Text("1920 × 1080 @ 30 FPS", fontSize = 10.sp, color = TextMuted)
                                         Text("YouTube, X, Landing Page", fontSize = 10.sp, color = TextSecondary)
                                         Spacer(modifier = Modifier.height(10.dp))
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = Color(0x2210B981)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
-                                            Text(
-                                                text = "READY TO RENDER",
-                                                fontSize = 9.sp,
-                                                color = AccentEmerald,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0x2210B981)
+                                            ) {
+                                                Text(
+                                                    text = "1080P",
+                                                    fontSize = 9.sp,
+                                                    color = AccentEmerald,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0x3310B981),
+                                                modifier = Modifier
+                                                    .clickable {
+                                                        viewModel.downloadPromoVideo(aspectRatio = AspectRatioFormat.LANDSCAPE_16_9)
+                                                    }
+                                                    .testTag("download_card_16x9")
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Download,
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(10.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text(
+                                                        text = "DOWNLOAD",
+                                                        fontSize = 9.sp,
+                                                        color = Color.White,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -831,17 +870,50 @@ fun ExportScreen(
                                         Text("1080 × 1920 @ 30 FPS", fontSize = 10.sp, color = TextMuted)
                                         Text("TikTok, Reels, Shorts", fontSize = 10.sp, color = TextSecondary)
                                         Spacer(modifier = Modifier.height(10.dp))
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = Color(0x2210B981)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
-                                            Text(
-                                                text = "READY TO RENDER",
-                                                fontSize = 9.sp,
-                                                color = AccentEmerald,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0x2210B981)
+                                            ) {
+                                                Text(
+                                                    text = "1080P",
+                                                    fontSize = 9.sp,
+                                                    color = AccentEmerald,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0x3310B981),
+                                                modifier = Modifier
+                                                    .clickable {
+                                                        viewModel.downloadPromoVideo(aspectRatio = AspectRatioFormat.PORTRAIT_9_16)
+                                                    }
+                                                    .testTag("download_card_9x16")
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Download,
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(10.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(3.dp))
+                                                    Text(
+                                                        text = "DOWNLOAD",
+                                                        fontSize = 9.sp,
+                                                        color = Color.White,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -915,7 +987,7 @@ fun ExportScreen(
                                                 modifier = Modifier.size(24.dp)
                                             )
                                             Spacer(modifier = Modifier.width(12.dp))
-                                            Column {
+                                            Column(modifier = Modifier.weight(1f)) {
                                                 Text(
                                                     text = "Render Completed (1080p 60fps)",
                                                     fontWeight = FontWeight.Bold,
@@ -923,17 +995,80 @@ fun ExportScreen(
                                                     fontSize = 13.sp
                                                 )
                                                 Text(
-                                                    text = "Saved to ./out/landscape.mp4 and ./out/portrait.mp4",
+                                                    text = "Ready to download or sync to device local storage",
                                                     fontSize = 11.sp,
                                                     color = Color(0xFFA7F3D0)
                                                 )
                                             }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Button(
+                                            onClick = {
+                                                viewModel.downloadPromoVideo(aspectRatio = AspectRatioFormat.LANDSCAPE_16_9)
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = AccentEmerald),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(44.dp)
+                                                .testTag("save_rendered_video_button")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Download,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Save 16:9 Landscape MP4 to Device Storage",
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                fontSize = 12.sp
+                                            )
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                }
+
+                item {
+                    // DEDICATED LOCAL STORAGE DOWNLOAD CARD
+                    VideoDownloadCard(
+                        downloadState = videoDownloadState,
+                        selectedQuality = selectedDownloadQuality,
+                        selectedDestination = selectedDownloadDestination,
+                        downloadedHistory = downloadedVideos,
+                        onSelectQuality = { viewModel.setDownloadQuality(it) },
+                        onSelectDestination = { viewModel.setDownloadDestination(it) },
+                        onDownloadFormat = { format ->
+                            viewModel.downloadPromoVideo(aspectRatio = format)
+                        },
+                        onDownloadAllFormats = {
+                            viewModel.downloadAllVideoFormats()
+                        },
+                        onOpenVideo = { result ->
+                            try {
+                                val intent = viewModel.createOpenVideoIntent(result)
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Cannot open video player: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onShareVideo = { result ->
+                            try {
+                                val intent = viewModel.createShareVideoIntent(result)
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Cannot share video: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.testTag("video_download_card")
+                    )
                 }
 
                 item {
