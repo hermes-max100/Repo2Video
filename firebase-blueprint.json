@@ -1,0 +1,159 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated DevDirector user profile stored under /users/{userId}. Access is restricted strictly to the owning user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name from Google Sign-In."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified email address of the user (PII, owner-only)."
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "Optional avatar URL from Google Sign-In."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp()) when profile was first created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp()) of the most recent update."
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CloudPromoProject": {
+      "title": "CloudPromoProject",
+      "description": "Cloud-synced promotional video project owned by a user under /users/{userId}/projects/{projectId}.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owning user."
+        },
+        "localProjectId": {
+          "type": "integer",
+          "description": "Corresponding local Room primary key ID."
+        },
+        "title": {
+          "type": "string",
+          "description": "Project title."
+        },
+        "tagline": {
+          "type": "string",
+          "description": "Brand tagline."
+        },
+        "repoUrl": {
+          "type": "string",
+          "description": "Repository URL or identifier."
+        },
+        "brandName": {
+          "type": "string",
+          "description": "Discovered brand name."
+        },
+        "primaryColorHex": {
+          "type": "string",
+          "description": "Primary brand color hex string."
+        },
+        "secondaryColorHex": {
+          "type": "string",
+          "description": "Secondary brand color hex string."
+        },
+        "accentColorHex": {
+          "type": "string",
+          "description": "Accent brand color hex string."
+        },
+        "narrativeTemplate": {
+          "type": "string",
+          "description": "Selected narrative template enum name."
+        },
+        "targetDurationSeconds": {
+          "type": "integer",
+          "description": "Target duration in seconds."
+        },
+        "voiceActor": {
+          "type": "string",
+          "description": "Selected voice actor enum name."
+        },
+        "musicTrack": {
+          "type": "string",
+          "description": "Selected music track enum name."
+        },
+        "transitionStyle": {
+          "type": "string",
+          "description": "Selected transition style enum name."
+        },
+        "scenesJson": {
+          "type": "string",
+          "description": "Serialized scene storyboard list."
+        },
+        "activeAspectRatio": {
+          "type": "string",
+          "description": "Active video aspect ratio format enum name."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp()) when project was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp()) when project was last updated."
+        }
+      },
+      "required": [
+        "userId",
+        "localProjectId",
+        "title",
+        "tagline",
+        "repoUrl",
+        "brandName",
+        "primaryColorHex",
+        "secondaryColorHex",
+        "accentColorHex",
+        "narrativeTemplate",
+        "targetDurationSeconds",
+        "voiceActor",
+        "musicTrack",
+        "transitionStyle",
+        "scenesJson",
+        "activeAspectRatio",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Owner-only user profile document containing Google Sign-In identity metadata."
+    },
+    "/users/{userId}/projects/{projectId}": {
+      "schema": {
+        "$ref": "#/entities/CloudPromoProject"
+      },
+      "description": "Owner-scoped promotional video projects synced to Cloud Firestore."
+    }
+  }
+}

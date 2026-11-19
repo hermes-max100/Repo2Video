@@ -1,0 +1,125 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Hardened Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidUserProfile(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 254)) &&
+             (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 1024)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidCloudPromoProject(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.localProjectId is int && data.localProjectId >= 0 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.tagline is string && data.tagline.size() <= 500 &&
+             data.repoUrl is string && data.repoUrl.size() <= 500 &&
+             data.brandName is string && data.brandName.size() >= 1 && data.brandName.size() <= 120 &&
+             data.primaryColorHex is string && data.primaryColorHex.size() >= 4 && data.primaryColorHex.size() <= 16 &&
+             data.secondaryColorHex is string && data.secondaryColorHex.size() >= 4 && data.secondaryColorHex.size() <= 16 &&
+             data.accentColorHex is string && data.accentColorHex.size() >= 4 && data.accentColorHex.size() <= 16 &&
+             data.narrativeTemplate is string && data.narrativeTemplate.size() >= 1 && data.narrativeTemplate.size() <= 64 &&
+             data.targetDurationSeconds is int && data.targetDurationSeconds >= 5 && data.targetDurationSeconds <= 600 &&
+             data.voiceActor is string && data.voiceActor.size() >= 1 && data.voiceActor.size() <= 64 &&
+             data.musicTrack is string && data.musicTrack.size() >= 1 && data.musicTrack.size() <= 64 &&
+             data.transitionStyle is string && data.transitionStyle.size() >= 1 && data.transitionStyle.size() <= 64 &&
+             data.scenesJson is string && data.scenesJson.size() <= 200000 &&
+             data.activeAspectRatio is string && data.activeAspectRatio.size() >= 1 && data.activeAspectRatio.size() <= 64 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // 4. Collection Rules: Owner-only User Profiles (PII protected; no list)
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'photoUrl', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoUrl', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // 5. Subcollection Rules: User-scoped Cloud Promo Projects
+      match /projects/{projectId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(projectId);
+
+        allow list: if isOwner(userId) && isValidId(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(projectId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'localProjectId', 'title', 'tagline', 'repoUrl', 'brandName',
+                           'primaryColorHex', 'secondaryColorHex', 'accentColorHex',
+                           'narrativeTemplate', 'targetDurationSeconds', 'voiceActor',
+                           'musicTrack', 'transitionStyle', 'scenesJson', 'activeAspectRatio',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'localProjectId', 'title', 'tagline', 'repoUrl', 'brandName',
+                           'primaryColorHex', 'secondaryColorHex', 'accentColorHex',
+                           'narrativeTemplate', 'targetDurationSeconds', 'voiceActor',
+                           'musicTrack', 'transitionStyle', 'scenesJson', 'activeAspectRatio',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidCloudPromoProject(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(projectId) &&
+                         isValidCloudPromoProject(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'localProjectId', 'title', 'tagline', 'repoUrl', 'brandName',
+                           'primaryColorHex', 'secondaryColorHex', 'accentColorHex',
+                           'narrativeTemplate', 'targetDurationSeconds', 'voiceActor',
+                           'musicTrack', 'transitionStyle', 'scenesJson', 'activeAspectRatio',
+                           'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(projectId);
+      }
+    }
+  }
+}

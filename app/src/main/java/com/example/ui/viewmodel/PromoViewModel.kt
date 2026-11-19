@@ -65,6 +65,7 @@ import com.example.data.model.VideoDownloadState
 import com.example.data.model.VideoDownloadStatus
 import com.example.data.model.VideoQuality
 import com.example.domain.manager.LocalVideoDownloadManager
+import com.example.data.model.CloudPromoProject
 import com.example.service.FirebasePromoSync
 import com.example.service.GeminiPromoService
 import com.example.service.GoogleAuthState
@@ -76,14 +77,26 @@ import com.example.service.XAiGrokService
 import com.example.service.XAiOAuthService
 import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.ThemePreferencesRepository
+import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+
+sealed interface CloudSyncUiState {
+    data object Loading : CloudSyncUiState
+    data class Success(val projects: List<CloudPromoProject>) : CloudSyncUiState
+    data class Error(val message: String) : CloudSyncUiState
+}
 
 class PromoViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -116,9 +129,14 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     private val xaiOAuthService = XAiOAuthService(application)
     private val xaiGrokService = XAiGrokService(xaiOAuthService)
     private val googleOAuthService = GoogleOAuthService(application)
-    private val firebaseSync = FirebasePromoSync()
+    private val firebaseSync = FirebasePromoSync(application)
     private val audioSynthEngine = AudioSynthEngine()
     private val voiceoverManager: VoiceoverManager
+
+    private val _cloudProjectsState = MutableStateFlow<CloudSyncUiState>(CloudSyncUiState.Loading)
+    val cloudProjectsState: StateFlow<CloudSyncUiState> = _cloudProjectsState.asStateFlow()
+    private var cloudSyncJob: Job? = null
+    private var activeUserId: String? = null
 
     val xaiAuthState: StateFlow<XAiAuthState> = xaiOAuthService.authState
     val googleAuthState: StateFlow<GoogleAuthState> = googleOAuthService.authState
@@ -166,32 +184,97 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
         _aiEngine.value = engine
     }
 
-    fun signInWithGoogle(activity: Activity) {
+    fun bindAuthenticatedUser(
+        userId: String,
+        displayName: String?,
+        email: String?,
+        photoUrl: String?
+    ) {
+        if (userId.isBlank() || activeUserId == userId) return
+        stopCloudSync()
+        activeUserId = userId
+        _cloudProjectsState.value = CloudSyncUiState.Loading
+
         viewModelScope.launch {
-            googleOAuthService.signInWithGoogle(activity)
+            firebaseSync.upsertUserProfile(
+                displayName = displayName ?: email?.substringBefore("@") ?: "DevDirector User",
+                email = email,
+                photoUrl = photoUrl
+            )
+        }
+
+        cloudSyncJob = viewModelScope.launch {
+            firebaseSync.observeCloudProjects(userId)
+                .map<List<CloudPromoProject>, CloudSyncUiState> { CloudSyncUiState.Success(it) }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val rootError = firestoreError ?: error
+                    Log.w("PromoViewModel", "Error observing cloud projects", rootError)
+                    emit(CloudSyncUiState.Error(rootError.localizedMessage ?: "Failed to sync cloud projects"))
+                }
+                .collect { state ->
+                    _cloudProjectsState.value = state
+                }
         }
     }
 
-    fun signInWithConfirmedGoogleAccount() {
-        googleOAuthService.signInWithConfirmedAccount()
-        _statusMessage.value = "Signed in as rivera.carmeloiii@gmail.com (DevDirector)"
+    private fun stopCloudSync() {
+        cloudSyncJob?.cancel()
+        cloudSyncJob = null
+        activeUserId = null
+        _cloudProjectsState.value = CloudSyncUiState.Loading
     }
 
-    fun signOutGoogle(activity: Activity? = null) {
-        googleOAuthService.signOut(activity)
-        _statusMessage.value = "Signed out of Google account"
+    fun signInWithGoogle(activity: Activity) {
+        viewModelScope.launch {
+            googleOAuthService.signInWithGoogle(activity).onSuccess { profile ->
+                bindAuthenticatedUser(
+                    userId = profile.uid,
+                    displayName = profile.displayName,
+                    email = profile.email,
+                    photoUrl = profile.photoUrl
+                )
+                _statusMessage.value = "Signed in as ${profile.email.ifBlank { profile.displayName }}"
+            }.onFailure { err ->
+                if (err !is androidx.credentials.exceptions.GetCredentialCancellationException) {
+                    _statusMessage.value = "Sign in failed: ${err.localizedMessage ?: "Unknown error"}"
+                }
+            }
+        }
+    }
+
+    fun signOutGoogle() {
+        viewModelScope.launch {
+            googleOAuthService.signOut(
+                onBeforeFirebaseSignOut = { stopCloudSync() }
+            )
+            _statusMessage.value = "Signed out of Google account"
+        }
     }
 
     fun syncCurrentProjectToCloud() {
         val project = _currentProject.value ?: return
         viewModelScope.launch {
-            _statusMessage.value = "Syncing '${project.title}' to cloud..."
-            val success = firebaseSync.backupProjectToCloud(project)
-            if (success) {
-                _statusMessage.value = "Project '${project.title}' synced to cloud!"
-            } else {
-                _statusMessage.value = "Local cloud cache updated for ${currentGoogleUser?.email ?: "DevDirector"}."
-            }
+            _statusMessage.value = "Syncing '${project.title}' to Cloud Firestore..."
+            firebaseSync.backupProjectToCloud(project)
+                .onSuccess { docId ->
+                    _statusMessage.value = "Project '${project.title}' synced to Firestore ($docId)!"
+                }
+                .onFailure { err ->
+                    _statusMessage.value = "Cloud sync failed: ${err.localizedMessage ?: "Sign in required"}"
+                }
+        }
+    }
+
+    fun restoreCloudProject(cloudProject: CloudPromoProject) {
+        viewModelScope.launch {
+            val localProject = cloudProject.toLocalPromoProject()
+            loadProject(localProject)
+            saveCurrentProject()
+            _statusMessage.value = "Restored '${cloudProject.title}' from Cloud Firestore"
         }
     }
 
@@ -1082,52 +1165,78 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendDirectorMessage(message: String) {
         if (message.isBlank()) return
-        val currentHistory = _directorChatHistory.value.toMutableList()
-        currentHistory.add("user" to message)
-        _directorChatHistory.value = currentHistory
+        val priorHistory = _directorChatHistory.value.toList()
+        val withUserMessage = priorHistory + ("user" to message)
+        _directorChatHistory.value = withUserMessage
+
+        // Apply immediate studio intent shortcuts from user direction
+        val lower = message.lowercase()
+        if (lower.contains("adam")) _voiceActor.value = VoiceActor.ADAM
+        if (lower.contains("daniel")) _voiceActor.value = VoiceActor.DANIEL
+        if (lower.contains("matilda")) _voiceActor.value = VoiceActor.MATILDA
+        if (lower.contains("rachel")) _voiceActor.value = VoiceActor.RACHEL
+        if (lower.contains("josh")) _voiceActor.value = VoiceActor.JOSH
+
+        if (lower.contains("rage")) _narrativeTemplate.value = NarrativeTemplate.RAGE_HOOK
+        if (lower.contains("demo")) _narrativeTemplate.value = NarrativeTemplate.DEMO_FIRST
+        if (lower.contains("problem")) _narrativeTemplate.value = NarrativeTemplate.PROBLEM_STACK
+        if (lower.contains("transformation")) _narrativeTemplate.value = NarrativeTemplate.TRANSFORMATION
+
+        if (lower.contains("metallic") || lower.contains("swoosh")) {
+            _transitionStyle.value = TransitionStyle.METALLIC_SWOOSH
+            playMetallicSwoosh()
+        }
 
         viewModelScope.launch {
             val isGrok = _aiEngine.value == AiEngine.GROK && xaiGrokService.isAvailable
-            val result = if (isGrok) {
+            if (isGrok) {
                 val grokRes = xaiGrokService.chatWithDirector(
-                    history = currentHistory,
+                    history = withUserMessage,
                     userMessage = message,
                     currentProject = _brandProfile.value
                 )
-                if (grokRes.isSuccess) grokRes else geminiService.chatWithDirector(
-                    history = currentHistory,
-                    userMessage = message,
-                    currentProject = _brandProfile.value
-                )
-            } else {
-                geminiService.chatWithDirector(
-                    history = currentHistory,
-                    userMessage = message,
-                    currentProject = _brandProfile.value
-                )
-            }
-            result.onSuccess { reply ->
-                val updated = _directorChatHistory.value.toMutableList()
-                updated.add("model" to reply)
-                _directorChatHistory.value = updated
-
-                // Parse quick intent from message
-                val lower = message.lowercase()
-                if (lower.contains("adam")) _voiceActor.value = VoiceActor.ADAM
-                if (lower.contains("daniel")) _voiceActor.value = VoiceActor.DANIEL
-                if (lower.contains("matilda")) _voiceActor.value = VoiceActor.MATILDA
-                if (lower.contains("rachel")) _voiceActor.value = VoiceActor.RACHEL
-                if (lower.contains("josh")) _voiceActor.value = VoiceActor.JOSH
-
-                if (lower.contains("rage")) _narrativeTemplate.value = NarrativeTemplate.RAGE_HOOK
-                if (lower.contains("demo")) _narrativeTemplate.value = NarrativeTemplate.DEMO_FIRST
-                if (lower.contains("problem")) _narrativeTemplate.value = NarrativeTemplate.PROBLEM_STACK
-                if (lower.contains("transformation")) _narrativeTemplate.value = NarrativeTemplate.TRANSFORMATION
-
-                if (lower.contains("metallic") || lower.contains("swoosh")) {
-                    _transitionStyle.value = TransitionStyle.METALLIC_SWOOSH
-                    playMetallicSwoosh()
+                if (grokRes.isSuccess) {
+                    val reply = grokRes.getOrNull().orEmpty()
+                    _directorChatHistory.value = _directorChatHistory.value + ("model" to reply)
+                    return@launch
                 }
+            }
+
+            // Stream response live from Firebase AI Logic (gemini-3.8-flash)
+            val streamingIndex = _directorChatHistory.value.size
+            _directorChatHistory.value = _directorChatHistory.value + ("model" to "...")
+            try {
+                geminiService.chatWithDirectorStream(
+                    history = priorHistory,
+                    userMessage = message,
+                    currentProject = _brandProfile.value
+                ).collect { accumulated ->
+                    val mutable = _directorChatHistory.value.toMutableList()
+                    if (streamingIndex in mutable.indices) {
+                        mutable[streamingIndex] = "model" to accumulated
+                        _directorChatHistory.value = mutable
+                    }
+                }
+            } catch (e: TimeoutCancellationException) {
+                Log.e("PromoViewModel", "Director chat timed out", e)
+                val mutable = _directorChatHistory.value.toMutableList()
+                val errMsg = "Gemini Director timed out after 60 seconds. Please try again."
+                if (streamingIndex in mutable.indices) {
+                    mutable[streamingIndex] = "model" to errMsg
+                    _directorChatHistory.value = mutable
+                }
+                _statusMessage.value = errMsg
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("PromoViewModel", "Director chat failed", e)
+                val mutable = _directorChatHistory.value.toMutableList()
+                val errMsg = "Gemini AI error: ${e.localizedMessage ?: "Failed to generate response."}"
+                if (streamingIndex in mutable.indices) {
+                    mutable[streamingIndex] = "model" to errMsg
+                    _directorChatHistory.value = mutable
+                }
+                _statusMessage.value = errMsg
             }
         }
     }
@@ -1135,20 +1244,20 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
     fun generateVeoVideoForScene(sceneIndex: Int) {
         viewModelScope.launch {
             val scene = _scenes.value.getOrNull(sceneIndex) ?: return@launch
-            _statusMessage.value = "Generating Veo 3 video clip for Scene ${sceneIndex + 1}..."
+            _statusMessage.value = "Generating Gemini motion directive for Scene ${sceneIndex + 1}..."
 
             val prompt = "${brandProfile.value.name} promo video background: ${scene.title}. ${scene.subtitle}. High resolution cinematic motion graphic, glowing neon elements, studio lighting."
-            val result = geminiService.generateVeoVideo(prompt, _activeAspectRatio.value)
+            val result = geminiService.generateVeoShotDirection(prompt, _activeAspectRatio.value)
 
-            result.onSuccess { opOrUrl ->
+            result.onSuccess { directive ->
                 val updatedScene = scene.copy(
                     visualType = SceneVisualType.VEO_AI_VIDEO,
-                    generatedVideoUrl = opOrUrl
+                    subtitle = directive.take(120)
                 )
                 updateScene(sceneIndex, updatedScene)
-                _statusMessage.value = "Veo video clip attached to Scene ${sceneIndex + 1}!"
-            }.onFailure {
-                _statusMessage.value = "Veo generated simulated animation."
+                _statusMessage.value = "Gemini motion directive applied to Scene ${sceneIndex + 1}!"
+            }.onFailure { err ->
+                _statusMessage.value = "Gemini motion directive failed: ${err.localizedMessage ?: "Unknown error"}"
             }
         }
     }
@@ -1465,6 +1574,8 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
+        stopCloudSync()
+        googleOAuthService.release()
         audioSynthEngine.stop()
         voiceoverManager.release()
     }

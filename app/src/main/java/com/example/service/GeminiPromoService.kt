@@ -1,125 +1,200 @@
 package com.example.service
 
 import android.util.Log
-import com.example.BuildConfig
 import com.example.data.model.AspectRatioFormat
 import com.example.data.model.BrandProfile
 import com.example.data.model.EmotionalPreset
 import com.example.data.model.NarrativeTemplate
 import com.example.data.model.PromoScene
 import com.example.data.model.SceneVisualType
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.Schema
+import com.google.firebase.ai.type.content
+import com.google.firebase.ai.type.generationConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
+import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
+import java.util.UUID
 
+/**
+ * Gemini AI service powered by Firebase AI Logic (`Firebase.ai`) and App Check.
+ * Requires no client-side API key; uses `gemini-3.8-flash` with structured JSON schemas
+ * (`Schema.obj(...)`) and streaming multi-turn Director Chat.
+ */
 class GeminiPromoService {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .build()
+    companion object {
+        private const val TAG = "GeminiPromoService"
+        const val DEFAULT_MODEL = "gemini-3.8-flash"
+        private const val INFERENCE_TIMEOUT_MS = 60_000L
+    }
 
-    private val apiKey: String
-        get() = try {
-            BuildConfig.GEMINI_API_KEY
-        } catch (_: Exception) { "" }
+    private val brandSchema by lazy {
+        Schema.obj(
+            properties = mapOf(
+                "name" to Schema.string(description = "Product or repository name"),
+                "tagline" to Schema.string(description = "Punchy tagline, max 10 words"),
+                "description" to Schema.string(description = "Short 1-2 sentence product description"),
+                "primaryColorHex" to Schema.string(description = "Modern vibrant hex color like #6366F1"),
+                "secondaryColorHex" to Schema.string(description = "Secondary complementary hex color"),
+                "accentColorHex" to Schema.string(description = "Accent highlight hex color"),
+                "techStack" to Schema.array(
+                    items = Schema.string(),
+                    description = "4-6 technologies or frameworks used"
+                ),
+                "keyFeatures" to Schema.array(
+                    items = Schema.string(),
+                    description = "3-5 killer features, max 8 words each"
+                ),
+                "targetAudience" to Schema.string(description = "Primary target audience")
+            )
+        )
+    }
 
-    val hasApiKey: Boolean
-        get() = apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY"
+    private val scriptSchema by lazy {
+        Schema.obj(
+            properties = mapOf(
+                "scenes" to Schema.array(
+                    items = Schema.obj(
+                        properties = mapOf(
+                            "orderIndex" to Schema.integer(description = "Zero-based scene order"),
+                            "title" to Schema.string(description = "Short punchy scene title"),
+                            "subtitle" to Schema.string(description = "Short subtitle"),
+                            "voiceover" to Schema.string(description = "Compelling narration line (12-25 words)"),
+                            "emotionalPreset" to Schema.enumeration(
+                                values = listOf("RAGE", "WHISPER", "CONFIDENT", "WARM", "DRAMATIC"),
+                                description = "Emotional vocal tone for this scene"
+                            ),
+                            "durationSeconds" to Schema.double(description = "Scene duration in seconds (2.5 to 5.0)"),
+                            "visualType" to Schema.enumeration(
+                                values = listOf(
+                                    "HOOK_FRUSTRATION",
+                                    "CODE_TERMINAL",
+                                    "BROWSER_MOCKUP_3D",
+                                    "FEATURE_SPOTLIGHT",
+                                    "METRIC_COUNTER",
+                                    "LOGO_REVEAL_CTA"
+                                ),
+                                description = "Visual layout preset"
+                            ),
+                            "accentTag" to Schema.string(description = "Short uppercase category tag"),
+                            "codeSnippet" to Schema.string(description = "Optional code snippet", nullable = true),
+                            "metricNumber" to Schema.string(description = "Optional metric figure like 50K+", nullable = true),
+                            "metricLabel" to Schema.string(description = "Optional metric caption", nullable = true),
+                            "badgeTags" to Schema.array(
+                                items = Schema.string(),
+                                description = "2-3 short highlight chips"
+                            ),
+                            "ctaButtonText" to Schema.string(description = "Optional CTA button label", nullable = true),
+                            "ctaUrl" to Schema.string(description = "Optional CTA URL", nullable = true)
+                        ),
+                        optionalProperties = listOf(
+                            "codeSnippet",
+                            "metricNumber",
+                            "metricLabel",
+                            "ctaButtonText",
+                            "ctaUrl"
+                        )
+                    ),
+                    description = "Ordered list of promotional video scenes"
+                )
+            )
+        )
+    }
+
+    private val brandDiscoveryModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = DEFAULT_MODEL,
+            generationConfig = generationConfig {
+                temperature = 0.3f
+                responseMimeType = "application/json"
+                responseSchema = brandSchema
+            },
+            systemInstruction = content {
+                text(
+                    "You are an expert brand designer and technical marketer for developer tools. " +
+                        "Analyze the provided repository URL, codebase metadata, or product description " +
+                        "and extract a crisp, cohesive brand profile."
+                )
+            }
+        )
+    }
+
+    private val scriptGeneratorModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = DEFAULT_MODEL,
+            generationConfig = generationConfig {
+                temperature = 0.4f
+                responseMimeType = "application/json"
+                responseSchema = scriptSchema
+            },
+            systemInstruction = content {
+                text(
+                    "You are an award-winning promotional video director producing high-converting " +
+                        "developer product launch storyboards. Match emotional presets (RAGE, WHISPER, " +
+                        "CONFIDENT, WARM, DRAMATIC) and visual types to the narrative arc."
+                )
+            }
+        )
+    }
+
+    private val directorChatModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = DEFAULT_MODEL,
+            generationConfig = generationConfig {
+                temperature = 0.7f
+            },
+            systemInstruction = content {
+                text(
+                    "You are Gemini Director inside DevDirector Studio. You help developers craft " +
+                        "high-converting promo videos for their codebases: rewriting voiceovers with " +
+                        "emotional presets (Rage, Whisper, Confident, Warm, Dramatic), tuning 2-4s " +
+                        "scene pacing, adapting 16:9 Landscape & 9:16 Portrait layouts, and recommending " +
+                        "transitions (Metallic Swoosh, Spring Wipe, Velocity Slide) and voice actors " +
+                        "(Matilda, Rachel, Daniel, Josh, Adam). Keep responses concise, actionable, and punchy."
+                )
+            }
+        )
+    }
 
     /**
-     * Phase 1: Brand Discovery from codebase info or repo description
+     * Phase 1: Brand Discovery from codebase info or repository URL using Gemini structured output.
      */
     suspend fun discoverBrand(repoInput: String): Result<BrandProfile> = withContext(Dispatchers.IO) {
-        if (!hasApiKey) {
-            // Intelligent fallback brand discovery
-            return@withContext Result.success(createLocalBrandProfile(repoInput))
-        }
-
         try {
-            val systemPrompt = """
-                You are an expert brand designer and technical marketer for developer tools.
-                Analyze the provided repository, codebase info, package.json, or product description.
-                Extract:
-                1. Product Name
-                2. Punchy Tagline (max 10 words)
-                3. Short Description (1-2 sentences)
-                4. Primary Hex Color (modern vibrant, e.g. #6366F1, #06B6D4, #8B5CF6, #F43F5E)
-                5. Secondary Hex Color
-                6. Accent Hex Color (#F59E0B, #10B981, etc.)
-                7. Tech Stack (list of 4-6 technologies/frameworks)
-                8. Key Features (3-5 killer features, max 8 words each)
-                9. Target Audience
-                
-                Respond ONLY with valid JSON in this exact structure:
-                {
-                  "name": "...",
-                  "tagline": "...",
-                  "description": "...",
-                  "primaryColorHex": "#HEX",
-                  "secondaryColorHex": "#HEX",
-                  "accentColorHex": "#HEX",
-                  "techStack": ["...", "..."],
-                  "keyFeatures": ["...", "..."],
-                  "targetAudience": "..."
+            val response = withTimeout(INFERENCE_TIMEOUT_MS) {
+                brandDiscoveryModel.generateContent("Analyze this repository / codebase info:\n$repoInput")
+            }
+            val jsonString = response.text
+            if (jsonString.isNullOrBlank()) {
+                return@withContext Result.failure(IllegalStateException("Gemini returned an empty brand profile."))
+            }
+
+            val brandJson = JSONObject(jsonString)
+            val techStackList = buildList {
+                val arr = brandJson.optJSONArray("techStack")
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val item = arr.optString(i).trim()
+                        if (item.isNotEmpty()) add(item)
+                    }
                 }
-            """.trimIndent()
-
-            val requestJson = JSONObject().apply {
-                put("contents", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("role", "user")
-                        put("parts", JSONArray().apply {
-                            put(JSONObject().put("text", "Codebase info:\n$repoInput"))
-                        })
-                    })
-                })
-                put("systemInstruction", JSONObject().apply {
-                    put("parts", JSONArray().apply {
-                        put(JSONObject().put("text", systemPrompt))
-                    })
-                })
-                put("generationConfig", JSONObject().apply {
-                    put("temperature", 0.3)
-                    put("responseMimeType", "application/json")
-                })
             }
-
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
-            val body = requestJson.toString().toRequestBody("application/json".toMediaType())
-            val request = Request.Builder().url(endpoint).post(body).build()
-
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                val errorMsg = response.body?.string() ?: "HTTP ${response.code}"
-                Log.w("GeminiPromoService", "Brand discovery failed, using fallback: $errorMsg")
-                return@withContext Result.success(createLocalBrandProfile(repoInput))
-            }
-
-            val respBody = response.body?.string() ?: ""
-            val jsonRoot = JSONObject(respBody)
-            val candidate = jsonRoot.getJSONArray("candidates").getJSONObject(0)
-            val content = candidate.getJSONObject("content")
-            val rawText = content.getJSONArray("parts").getJSONObject(0).getString("text")
-
-            val brandJson = JSONObject(rawText)
-            val techStackList = mutableListOf<String>()
-            val techArray = brandJson.optJSONArray("techStack")
-            if (techArray != null) {
-                for (i in 0 until techArray.length()) techStackList.add(techArray.getString(i))
-            }
-
-            val featuresList = mutableListOf<String>()
-            val featArray = brandJson.optJSONArray("keyFeatures")
-            if (featArray != null) {
-                for (i in 0 until featArray.length()) featuresList.add(featArray.getString(i))
+            val featuresList = buildList {
+                val arr = brandJson.optJSONArray("keyFeatures")
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val item = arr.optString(i).trim()
+                        if (item.isNotEmpty()) add(item)
+                    }
+                }
             }
 
             Result.success(
@@ -131,603 +206,216 @@ class GeminiPromoService {
                     primaryColorHex = brandJson.optString("primaryColorHex", "#6366F1"),
                     secondaryColorHex = brandJson.optString("secondaryColorHex", "#8B5CF6"),
                     accentColorHex = brandJson.optString("accentColorHex", "#F59E0B"),
-                    techStack = if (techStackList.isNotEmpty()) techStackList else listOf("TypeScript", "React", "Remotion"),
-                    keyFeatures = if (featuresList.isNotEmpty()) featuresList else listOf("Fast setup", "Modern UI", "Cloud scale"),
+                    techStack = techStackList.ifEmpty { listOf("Kotlin", "Jetpack Compose") },
+                    keyFeatures = featuresList.ifEmpty { listOf("Fast setup", "Modern UI", "Cloud scale") },
                     targetAudience = brandJson.optString("targetAudience", "Developers & creators"),
-                    repoPathOrUrl = repoInput.take(60)
+                    repoPathOrUrl = repoInput.take(120)
                 )
             )
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Brand discovery timed out", e)
+            Result.failure(Exception("Brand discovery timed out after 60 seconds. Please try again.", e))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e("GeminiPromoService", "Error in brand discovery: ${e.message}", e)
-            Result.success(createLocalBrandProfile(repoInput))
+            Log.e(TAG, "Firebase AI brand discovery failed", e)
+            Result.failure(e)
         }
     }
 
     /**
-     * Phase 2 & 3: Generate Scene Script based on Narrative Template & Duration
+     * Phase 2 & 3: Generate Scene Script based on Narrative Template & Target Duration.
      */
     suspend fun generatePromoScript(
         brand: BrandProfile,
         template: NarrativeTemplate,
         durationSeconds: Int
     ): Result<List<PromoScene>> = withContext(Dispatchers.IO) {
-        if (!hasApiKey) {
-            return@withContext Result.success(createLocalScript(brand, template, durationSeconds))
-        }
-
         try {
-            val sceneCount = when (durationSeconds) {
-                30 -> 4
-                60 -> 5
+            val sceneCount = when {
+                durationSeconds <= 30 -> 4
+                durationSeconds <= 60 -> 5
                 else -> 6
             }
-
-            val systemPrompt = """
-                You are an award-winning promo video director producing a Remotion-powered video script.
+            val prompt = """
+                Generate a complete $durationSeconds-second promo storyboard ($sceneCount scenes, 2.5s to 4.5s each).
                 Narrative Template: ${template.title} (${template.arc})
-                Target Duration: $durationSeconds seconds total ($sceneCount scenes, 2.5s to 4.5s each).
                 Brand Name: ${brand.name}
                 Tagline: ${brand.tagline}
                 Description: ${brand.description}
-                Features: ${brand.keyFeatures.joinToString(", ")}
+                Key Features: ${brand.keyFeatures.joinToString(", ")}
                 Tech Stack: ${brand.techStack.joinToString(", ")}
-
-                Produce $sceneCount high-energy scenes.
-                For voiceover, assign an emotional preset per scene matching the arc:
-                - RAGE: frustration hook ("Are you serious right now?!")
-                - WHISPER: secret reveal ("What if you never had to guess again?")
-                - CONFIDENT: feature demo & smart detection
-                - WARM: social proof & scale metrics
-                - DRAMATIC: final punchy call-to-action ("Try it now. Free.")
-
-                Visual types must be chosen from:
-                HOOK_FRUSTRATION, CODE_TERMINAL, BROWSER_MOCKUP_3D, FEATURE_SPOTLIGHT, METRIC_COUNTER, LOGO_REVEAL_CTA
-
-                Respond ONLY with JSON matching:
-                {
-                  "scenes": [
-                    {
-                      "orderIndex": 0,
-                      "title": "Short scene title",
-                      "subtitle": "Short subtitle",
-                      "voiceover": "Compelling narration line spoken by AI voice (12-25 words)",
-                      "emotionalPreset": "RAGE|WHISPER|CONFIDENT|WARM|DRAMATIC",
-                      "durationSeconds": 3.5,
-                      "visualType": "HOOK_FRUSTRATION|CODE_TERMINAL|BROWSER_MOCKUP_3D|FEATURE_SPOTLIGHT|METRIC_COUNTER|LOGO_REVEAL_CTA",
-                      "accentTag": "Category / Step Tag",
-                      "codeSnippet": "Code snippet or null",
-                      "metricNumber": "Metric number like 50,000+ or null",
-                      "metricLabel": "Metric label or null",
-                      "badgeTags": ["Tag 1", "Tag 2"],
-                      "ctaButtonText": "Button label if CTA or null",
-                      "ctaUrl": "URL if CTA or null"
-                    }
-                  ]
-                }
+                Target Audience: ${brand.targetAudience}
             """.trimIndent()
 
-            val requestJson = JSONObject().apply {
-                put("contents", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("role", "user")
-                        put("parts", JSONArray().apply {
-                            put(JSONObject().put("text", "Generate complete $durationSeconds-second promo script for ${brand.name}."))
-                        })
-                    })
-                })
-                put("systemInstruction", JSONObject().apply {
-                    put("parts", JSONArray().apply {
-                        put(JSONObject().put("text", systemPrompt))
-                    })
-                })
-                put("generationConfig", JSONObject().apply {
-                    put("temperature", 0.4)
-                    put("responseMimeType", "application/json")
-                })
+            val response = withTimeout(INFERENCE_TIMEOUT_MS) {
+                scriptGeneratorModel.generateContent(prompt)
+            }
+            val jsonString = response.text
+            if (jsonString.isNullOrBlank()) {
+                return@withContext Result.failure(IllegalStateException("Gemini returned an empty script."))
             }
 
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
-            val body = requestJson.toString().toRequestBody("application/json".toMediaType())
-            val request = Request.Builder().url(endpoint).post(body).build()
-
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                Log.w("GeminiPromoService", "Script generation failed, using local script")
-                return@withContext Result.success(createLocalScript(brand, template, durationSeconds))
-            }
-
-            val respBody = response.body?.string() ?: ""
-            val jsonRoot = JSONObject(respBody)
-            val candidate = jsonRoot.getJSONArray("candidates").getJSONObject(0)
-            val content = candidate.getJSONObject("content")
-            val rawText = content.getJSONArray("parts").getJSONObject(0).getString("text")
-
-            val scriptObj = JSONObject(rawText)
+            val scriptObj = JSONObject(jsonString)
             val scenesArray = scriptObj.getJSONArray("scenes")
-            val resultScenes = mutableListOf<PromoScene>()
+            val resultScenes = buildList {
+                for (i in 0 until scenesArray.length()) {
+                    val sc = scenesArray.getJSONObject(i)
+                    val badges = buildList {
+                        val bArr = sc.optJSONArray("badgeTags")
+                        if (bArr != null) {
+                            for (j in 0 until bArr.length()) {
+                                val tag = bArr.optString(j).trim()
+                                if (tag.isNotEmpty()) add(tag)
+                            }
+                        }
+                    }
+                    val emotionRaw = sc.optString("emotionalPreset", "CONFIDENT")
+                    val visualRaw = sc.optString("visualType", "BROWSER_MOCKUP_3D")
 
-            for (i in 0 until scenesArray.length()) {
-                val sc = scenesArray.getJSONObject(i)
-                val badges = mutableListOf<String>()
-                val bArr = sc.optJSONArray("badgeTags")
-                if (bArr != null) {
-                    for (j in 0 until bArr.length()) badges.add(bArr.getString(j))
-                }
-
-                resultScenes.add(
-                    PromoScene(
-                        id = java.util.UUID.randomUUID().toString(),
-                        orderIndex = i,
-                        title = sc.optString("title", "Scene ${i + 1}"),
-                        subtitle = sc.optString("subtitle", ""),
-                        voiceover = sc.optString("voiceover", "Introducing the next generation of building."),
-                        emotionalPreset = try {
-                            EmotionalPreset.valueOf(sc.optString("emotionalPreset", "CONFIDENT"))
-                        } catch (_: Exception) { EmotionalPreset.CONFIDENT },
-                        durationSeconds = sc.optDouble("durationSeconds", 3.5).toFloat(),
-                        visualType = try {
-                            SceneVisualType.valueOf(sc.optString("visualType", "BROWSER_MOCKUP_3D"))
-                        } catch (_: Exception) { SceneVisualType.BROWSER_MOCKUP_3D },
-                        accentTag = sc.optString("accentTag", "FEATURE"),
-                        codeSnippet = sc.optString("codeSnippet", "").ifEmpty { null },
-                        metricNumber = sc.optString("metricNumber", "").ifEmpty { null },
-                        metricLabel = sc.optString("metricLabel", "").ifEmpty { null },
-                        badgeTags = badges,
-                        ctaButtonText = sc.optString("ctaButtonText", "").ifEmpty { null },
-                        ctaUrl = sc.optString("ctaUrl", "").ifEmpty { null }
+                    add(
+                        PromoScene(
+                            id = UUID.randomUUID().toString(),
+                            orderIndex = i,
+                            title = sc.optString("title", "Scene ${i + 1}"),
+                            subtitle = sc.optString("subtitle", ""),
+                            voiceover = sc.optString("voiceover", ""),
+                            emotionalPreset = enumValues<EmotionalPreset>()
+                                .firstOrNull { it.name == emotionRaw } ?: EmotionalPreset.CONFIDENT,
+                            durationSeconds = sc.optDouble("durationSeconds", 3.5).toFloat().coerceIn(2.0f, 8.0f),
+                            visualType = enumValues<SceneVisualType>()
+                                .firstOrNull { it.name == visualRaw } ?: SceneVisualType.BROWSER_MOCKUP_3D,
+                            accentTag = sc.optString("accentTag", "FEATURE"),
+                            codeSnippet = sc.optString("codeSnippet", "").takeIf { it.isNotBlank() && it != "null" },
+                            metricNumber = sc.optString("metricNumber", "").takeIf { it.isNotBlank() && it != "null" },
+                            metricLabel = sc.optString("metricLabel", "").takeIf { it.isNotBlank() && it != "null" },
+                            badgeTags = badges,
+                            ctaButtonText = sc.optString("ctaButtonText", "").takeIf { it.isNotBlank() && it != "null" },
+                            ctaUrl = sc.optString("ctaUrl", "").takeIf { it.isNotBlank() && it != "null" }
+                        )
                     )
-                )
+                }
             }
 
-            Result.success(if (resultScenes.isNotEmpty()) resultScenes else createLocalScript(brand, template, durationSeconds))
-        } catch (e: Exception) {
-            Log.e("GeminiPromoService", "Error generating script: ${e.message}", e)
-            Result.success(createLocalScript(brand, template, durationSeconds))
-        }
-    }
-
-    /**
-     * Veo Video Generation API (`veo-3.1-fast-generate-preview`)
-     */
-    suspend fun generateVeoVideo(prompt: String, format: AspectRatioFormat): Result<String> = withContext(Dispatchers.IO) {
-        if (!hasApiKey) {
-            // Simulated instant preview response for prototyping
-            val sampleVideoUri = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-            return@withContext Result.success(sampleVideoUri)
-        }
-
-        try {
-            val aspectString = if (format == AspectRatioFormat.LANDSCAPE_16_9) "16:9" else "9:16"
-            val requestJson = JSONObject().apply {
-                put("prompt", prompt)
-                put("config", JSONObject().apply {
-                    put("numberOfVideos", 1)
-                    put("resolution", "1080p")
-                    put("aspectRatio", aspectString)
-                })
-            }
-
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-fast-generate-preview:generateVideos?key=$apiKey"
-            val body = requestJson.toString().toRequestBody("application/json".toMediaType())
-            val request = Request.Builder().url(endpoint).post(body).build()
-
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val respBody = response.body?.string() ?: ""
-                val json = JSONObject(respBody)
-                val opName = json.optString("name", "operations/veo_preview_simulation")
-                Result.success(opName)
+            if (resultScenes.isEmpty()) {
+                Result.failure(IllegalStateException("Gemini generated zero scenes."))
             } else {
-                Result.failure(Exception("Veo API Error: ${response.code}"))
+                Result.success(resultScenes)
             }
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Script generation timed out", e)
+            Result.failure(Exception("Script generation timed out after 60 seconds. Please try again.", e))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
+            Log.e(TAG, "Firebase AI script generation failed", e)
             Result.failure(e)
         }
     }
 
     /**
-     * AI Director Chat for iterating on the promo video
+     * AI Director streaming multi-turn chat via Firebase AI Logic (`generateContentStream` / `sendMessageStream`).
+     */
+    fun chatWithDirectorStream(
+        history: List<Pair<String, String>>,
+        userMessage: String,
+        currentProject: BrandProfile
+    ): Flow<String> = flow {
+        val chatHistory = buildList {
+            add(
+                content("user") {
+                    text(
+                        "Current project context — Name: ${currentProject.name}, " +
+                            "Tagline: ${currentProject.tagline}, " +
+                            "Features: ${currentProject.keyFeatures.joinToString("; ")}, " +
+                            "Stack: ${currentProject.techStack.joinToString(", ")}."
+                    )
+                }
+            )
+            add(
+                content("model") {
+                    text("Got it — ready to direct the promo video for ${currentProject.name}.")
+                }
+            )
+            history.forEach { (role, msg) ->
+                val normalizedRole = if (role == "user") "user" else "model"
+                add(content(normalizedRole) { text(msg) })
+            }
+        }
+
+        val chat = directorChatModel.startChat(history = chatHistory)
+        val accumulated = StringBuilder()
+        withTimeout(INFERENCE_TIMEOUT_MS) {
+            chat.sendMessageStream(userMessage).collect { chunk ->
+                val delta = chunk.text.orEmpty()
+                if (delta.isNotEmpty()) {
+                    accumulated.append(delta)
+                    emit(accumulated.toString())
+                }
+            }
+        }
+        if (accumulated.isBlank()) {
+            throw IllegalStateException("Gemini returned an empty response.")
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Unary Director Chat helper delegating to Firebase AI Logic.
      */
     suspend fun chatWithDirector(
-        history: List<Pair<String, String>>, // role, text
+        history: List<Pair<String, String>>,
         userMessage: String,
         currentProject: BrandProfile
     ): Result<String> = withContext(Dispatchers.IO) {
-        if (!hasApiKey) {
-            return@withContext Result.success(generateLocalDirectorResponse(userMessage, currentProject))
-        }
-
         try {
-            val systemPrompt = """
-                You are Claude / Gemini Director, the creative AI behind promo-video-skill.
-                You help developers craft high-converting promo videos for their codebases.
-                Current Project: ${currentProject.name} - ${currentProject.tagline}
-                Features: ${currentProject.keyFeatures.joinToString("; ")}
-                
-                You can help with:
-                - Rewriting scene voiceovers with emotional presets (Rage, Whisper, Confident, Warm, Dramatic)
-                - Timing calculations (2-4 seconds per scene)
-                - Switching between 16:9 Landscape and 9:16 Portrait adaptations
-                - Recommending transitions (Metallic Swoosh, Spring Wipe, Velocity Slide)
-                - Auditioning voice actors (Matilda, Rachel, Daniel, Josh, Adam)
-                
-                Keep your answers concise, practical, and punchy.
-            """.trimIndent()
-
-            val contentsArray = JSONArray()
-            for ((role, text) in history) {
-                contentsArray.put(JSONObject().apply {
-                    put("role", if (role == "user") "user" else "model")
-                    put("parts", JSONArray().apply { put(JSONObject().put("text", text)) })
-                })
+            var finalReply = ""
+            chatWithDirectorStream(history, userMessage, currentProject).collect { accumulated ->
+                finalReply = accumulated
             }
-            contentsArray.put(JSONObject().apply {
-                put("role", "user")
-                put("parts", JSONArray().apply { put(JSONObject().put("text", userMessage)) })
-            })
-
-            val requestJson = JSONObject().apply {
-                put("contents", contentsArray)
-                put("systemInstruction", JSONObject().apply {
-                    put("parts", JSONArray().apply { put(JSONObject().put("text", systemPrompt)) })
-                })
-                put("generationConfig", JSONObject().apply {
-                    put("temperature", 0.7)
-                })
-            }
-
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
-            val body = requestJson.toString().toRequestBody("application/json".toMediaType())
-            val request = Request.Builder().url(endpoint).post(body).build()
-
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val respBody = response.body?.string() ?: ""
-                val jsonRoot = JSONObject(respBody)
-                val candidate = jsonRoot.getJSONArray("candidates").getJSONObject(0)
-                val text = candidate.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
-                Result.success(text)
+            if (finalReply.isBlank()) {
+                Result.failure(IllegalStateException("Gemini returned an empty response."))
             } else {
-                Result.success(generateLocalDirectorResponse(userMessage, currentProject))
+                Result.success(finalReply)
             }
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Director chat timed out", e)
+            Result.failure(Exception("Director response timed out after 60 seconds. Please try again.", e))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Result.success(generateLocalDirectorResponse(userMessage, currentProject))
+            Log.e(TAG, "Firebase AI director chat failed", e)
+            Result.failure(e)
         }
     }
 
-    private fun createLocalBrandProfile(input: String): BrandProfile {
-        val clean = input.trim()
-        val detectedName = when {
-            clean.contains("chrome", ignoreCase = true) -> "FastSolve Extension"
-            clean.contains("remotion", ignoreCase = true) -> "Remotion Video"
-            clean.contains("ai", ignoreCase = true) -> "PromoVideo AI"
-            clean.contains("supabase", ignoreCase = true) -> "Supabase Storage"
-            clean.contains("/") -> clean.substringAfter("/").replace("-", " ").replace("_", " ").capitalizeWords()
-            else -> clean.ifEmpty { "FastShip Dev" }
-        }
-
-        return BrandProfile(
-            name = detectedName,
-            tagline = "Turn your codebase into high-converting videos in seconds",
-            description = "Automated developer promotional videos rendered in landscape and portrait.",
-            logoIcon = "movie_filter",
-            primaryColorHex = "#6366F1",
-            secondaryColorHex = "#8B5CF6",
-            accentColorHex = "#F59E0B",
-            techStack = listOf("TypeScript", "React", "Remotion", "ElevenLabs", "Tailwind"),
-            keyFeatures = listOf(
-                "One-command video workflow",
-                "Landscape 16:9 + Portrait 9:16",
-                "AI voiceover with 5 emotional presets",
-                "Automated brand color & logo discovery"
-            ),
-            targetAudience = "Engineers, founders & content creators",
-            repoPathOrUrl = input.ifEmpty { "AKCodez/promo-video-skill" }
-        )
-    }
-
-    private fun createLocalScript(
-        brand: BrandProfile,
-        template: NarrativeTemplate,
-        duration: Int
-    ): List<PromoScene> {
-        val scenes = mutableListOf<PromoScene>()
-        when (template) {
-            NarrativeTemplate.RAGE_HOOK -> {
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 0,
-                        title = "Stop Wasting Time",
-                        subtitle = "The Frustration Hook",
-                        voiceover = "Spending 40 hours editing video demos instead of building your product?! Are you serious right now?",
-                        emotionalPreset = EmotionalPreset.RAGE,
-                        durationSeconds = 3.2f,
-                        visualType = SceneVisualType.HOOK_FRUSTRATION,
-                        accentTag = "THE PAIN",
-                        badgeTags = listOf("40hrs Editing", "Expensive Agencies", "Outdated Demos")
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 1,
-                        title = "Meet ${brand.name}",
-                        subtitle = "The Secret Solution",
-                        voiceover = "What if your repo could film its own marketing video with a single terminal command?",
-                        emotionalPreset = EmotionalPreset.WHISPER,
-                        durationSeconds = 3.6f,
-                        visualType = SceneVisualType.CODE_TERMINAL,
-                        accentTag = "THE REVEAL",
-                        codeSnippet = "npx skills add remotion-dev/skills\nnpx skills add AKCodez/promo-video-skill\n\n# Run with direction\nclaude \"Create a 60s dark mode promo video\"",
-                        badgeTags = brand.techStack.take(3)
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 2,
-                        title = "3D Browser & Spring Animations",
-                        subtitle = "Dual Format Renders",
-                        voiceover = "${brand.name} scans your codebase, extracts your brand colors, and renders stunning 3D browser mockups.",
-                        emotionalPreset = EmotionalPreset.CONFIDENT,
-                        durationSeconds = 3.8f,
-                        visualType = SceneVisualType.BROWSER_MOCKUP_3D,
-                        accentTag = "FEATURE SPOTLIGHT",
-                        badgeTags = brand.keyFeatures.take(3)
-                    )
-                )
-                if (duration >= 60) {
-                    scenes.add(
-                        PromoScene(
-                            orderIndex = 3,
-                            title = "Proven Traction",
-                            subtitle = "Trusted Worldwide",
-                            voiceover = "Join over 50,000 developers who turned their git repositories into viral product launch videos.",
-                            emotionalPreset = EmotionalPreset.WARM,
-                            durationSeconds = 3.4f,
-                            visualType = SceneVisualType.METRIC_COUNTER,
-                            accentTag = "SOCIAL PROOF",
-                            metricNumber = "50,000+",
-                            metricLabel = "Videos Rendered on Remotion",
-                            badgeTags = listOf("4K Output", "Zero Overlap", "Whisper Timing")
-                        )
-                    )
-                }
-                scenes.add(
-                    PromoScene(
-                        orderIndex = scenes.size,
-                        title = "Ship Today",
-                        subtitle = "Open Source & Free",
-                        voiceover = "Try ${brand.name} right now. One command. Rendered and ready to post.",
-                        emotionalPreset = EmotionalPreset.DRAMATIC,
-                        durationSeconds = 3.5f,
-                        visualType = SceneVisualType.LOGO_REVEAL_CTA,
-                        accentTag = "CALL TO ACTION",
-                        ctaButtonText = "Install Skill",
-                        ctaUrl = "https://${brand.name.lowercase().replace(" ", "")}.app",
-                        badgeTags = listOf("Free & MIT", "Dual Format")
-                    )
+    /**
+     * Generates a detailed Veo motion-direction shot prompt via Gemini 3.8 Flash.
+     */
+    suspend fun generateVeoShotDirection(
+        prompt: String,
+        format: AspectRatioFormat
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val aspectString = if (format == AspectRatioFormat.LANDSCAPE_16_9) "16:9" else "9:16"
+            val response = withTimeout(INFERENCE_TIMEOUT_MS) {
+                directorChatModel.generateContent(
+                    "Write a concise 1-sentence cinematic camera & motion directive ($aspectString) for: $prompt"
                 )
             }
-            NarrativeTemplate.PROBLEM_STACK -> {
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 0,
-                        title = "Marketing Is Broken",
-                        subtitle = "Pain Point 1",
-                        voiceover = "Nobody reads your README. Traditional video editors take days to master.",
-                        emotionalPreset = EmotionalPreset.RAGE,
-                        durationSeconds = 3.2f,
-                        visualType = SceneVisualType.HOOK_FRUSTRATION,
-                        accentTag = "PAIN 1",
-                        badgeTags = listOf("Zero Reach", "Low Conversions")
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 1,
-                        title = "Agency Costs Are Insane",
-                        subtitle = "Pain Point 2",
-                        voiceover = "Production agencies charge thousands for static slides that get outdated on your next commit.",
-                        emotionalPreset = EmotionalPreset.RAGE,
-                        durationSeconds = 3.4f,
-                        visualType = SceneVisualType.FEATURE_SPOTLIGHT,
-                        accentTag = "PAIN 2",
-                        badgeTags = listOf("$5,000 / video", "Weeks of Waiting")
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 2,
-                        title = "The Automated Way",
-                        subtitle = "What if...",
-                        voiceover = "What if your code was the source of truth for both your product and your video?",
-                        emotionalPreset = EmotionalPreset.WHISPER,
-                        durationSeconds = 3.5f,
-                        visualType = SceneVisualType.CODE_TERMINAL,
-                        accentTag = "SOLUTION",
-                        codeSnippet = "export default createPromoVideo({\n  brand: '${brand.name}',\n  theme: 'cinematic',\n  voice: 'adam'\n});",
-                        badgeTags = brand.techStack.take(3)
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 3,
-                        title = "Dual Format Renders",
-                        subtitle = "Landscape + Portrait",
-                        voiceover = "${brand.name} outputs two final MP4s in 16:9 and 9:16, ready for YouTube and TikTok instantly.",
-                        emotionalPreset = EmotionalPreset.CONFIDENT,
-                        durationSeconds = 3.8f,
-                        visualType = SceneVisualType.BROWSER_MOCKUP_3D,
-                        accentTag = "MULTIPLATFORM",
-                        badgeTags = listOf("1920x1080", "1080x1920", "Remotion")
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 4,
-                        title = "Launch with ${brand.name}",
-                        subtitle = "Start Free",
-                        voiceover = "Stop editing. Start shipping. Try ${brand.name} today.",
-                        emotionalPreset = EmotionalPreset.DRAMATIC,
-                        durationSeconds = 3.5f,
-                        visualType = SceneVisualType.LOGO_REVEAL_CTA,
-                        accentTag = "CTA",
-                        ctaButtonText = "Get Started Free",
-                        ctaUrl = "https://${brand.name.lowercase().replace(" ", "")}.app",
-                        badgeTags = listOf("MIT License")
-                    )
-                )
+            val text = response.text
+            if (text.isNullOrBlank()) {
+                Result.failure(IllegalStateException("Gemini returned an empty motion directive."))
+            } else {
+                Result.success(text.trim())
             }
-            NarrativeTemplate.DEMO_FIRST -> {
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 0,
-                        title = "Pure Code. Pure Video.",
-                        subtitle = "The Magic Moment",
-                        voiceover = "Watch ${brand.name} transform raw code into an animated 3D video in sixty seconds.",
-                        emotionalPreset = EmotionalPreset.CONFIDENT,
-                        durationSeconds = 3.5f,
-                        visualType = SceneVisualType.CODE_TERMINAL,
-                        accentTag = "MAGIC MOMENT",
-                        codeSnippet = "npx skills add AKCodez/promo-video-skill\nclaude \"Create promo video for this repo\"",
-                        badgeTags = brand.techStack.take(3)
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 1,
-                        title = "Interactive 3D Motion",
-                        subtitle = "How It Works",
-                        voiceover = "Physics-based spring animations, metallic swoosh sweeps, and synchronized audio narration.",
-                        emotionalPreset = EmotionalPreset.CONFIDENT,
-                        durationSeconds = 3.8f,
-                        visualType = SceneVisualType.BROWSER_MOCKUP_3D,
-                        accentTag = "HOW IT WORKS",
-                        badgeTags = brand.keyFeatures.take(3)
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 2,
-                        title = "Over 100,000 Videos",
-                        subtitle = "Built for Scale",
-                        voiceover = "Trusted by thousands of developer teams to launch with cinema-quality visuals.",
-                        emotionalPreset = EmotionalPreset.WARM,
-                        durationSeconds = 3.4f,
-                        visualType = SceneVisualType.METRIC_COUNTER,
-                        accentTag = "TRACTION",
-                        metricNumber = "100K+",
-                        metricLabel = "Videos Rendered",
-                        badgeTags = listOf("Fast Lambda", "Zero PATH Setup")
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 3,
-                        title = "Build Your Promo",
-                        subtitle = "One Command",
-                        voiceover = "Generate your promo video in one prompt. Visit us now.",
-                        emotionalPreset = EmotionalPreset.DRAMATIC,
-                        durationSeconds = 3.5f,
-                        visualType = SceneVisualType.LOGO_REVEAL_CTA,
-                        accentTag = "CTA",
-                        ctaButtonText = "Try Free",
-                        ctaUrl = "https://${brand.name.lowercase().replace(" ", "")}.app",
-                        badgeTags = listOf("Open Source")
-                    )
-                )
-            }
-            NarrativeTemplate.TRANSFORMATION -> {
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 0,
-                        title = "Before: Endless Editing",
-                        subtitle = "The Old Way",
-                        voiceover = "Before: Days spent cutting keyframes, recording bad audio, and struggling with complex timelines.",
-                        emotionalPreset = EmotionalPreset.RAGE,
-                        durationSeconds = 3.2f,
-                        visualType = SceneVisualType.HOOK_FRUSTRATION,
-                        accentTag = "BEFORE",
-                        badgeTags = listOf("Slow", "Expensive", "Inconsistent")
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 1,
-                        title = "After: One Command",
-                        subtitle = "The New Way",
-                        voiceover = "After: Point your AI at your repository and watch both formats render automatically.",
-                        emotionalPreset = EmotionalPreset.CONFIDENT,
-                        durationSeconds = 3.6f,
-                        visualType = SceneVisualType.CODE_TERMINAL,
-                        accentTag = "AFTER",
-                        codeSnippet = "claude \"Build a 60s dark mode promo with metallic swoosh transitions\"",
-                        badgeTags = listOf("Automated", "High Res", "Voiceover")
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 2,
-                        title = "Feature Breakdown",
-                        subtitle = "Smart Capabilities",
-                        voiceover = "${brand.name} extracts your core value proposition and syncs word-for-word voiceover.",
-                        emotionalPreset = EmotionalPreset.CONFIDENT,
-                        durationSeconds = 3.8f,
-                        visualType = SceneVisualType.BROWSER_MOCKUP_3D,
-                        accentTag = "FEATURES",
-                        badgeTags = brand.keyFeatures.take(3)
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 3,
-                        title = "10x Faster Launches",
-                        subtitle = "Real Results",
-                        voiceover = "Developers save over 35 hours per video and increase conversion rates by 300%.",
-                        emotionalPreset = EmotionalPreset.WARM,
-                        durationSeconds = 3.4f,
-                        visualType = SceneVisualType.METRIC_COUNTER,
-                        accentTag = "PROOF",
-                        metricNumber = "300%",
-                        metricLabel = "Higher Conversion Rate",
-                        badgeTags = listOf("Time Saved", "High ROI")
-                    )
-                )
-                scenes.add(
-                    PromoScene(
-                        orderIndex = 4,
-                        title = "Transform Your Launch",
-                        subtitle = "Get Started",
-                        voiceover = "Upgrade your workflow with ${brand.name}. Free, open source, and instant.",
-                        emotionalPreset = EmotionalPreset.DRAMATIC,
-                        durationSeconds = 3.5f,
-                        visualType = SceneVisualType.LOGO_REVEAL_CTA,
-                        accentTag = "CTA",
-                        ctaButtonText = "Install Promo Skill",
-                        ctaUrl = "https://${brand.name.lowercase().replace(" ", "")}.app",
-                        badgeTags = listOf("Install Free")
-                    )
-                )
-            }
-        }
-        return scenes
-    }
-
-    private fun generateLocalDirectorResponse(prompt: String, brand: BrandProfile): String {
-        val lower = prompt.lowercase()
-        return when {
-            lower.contains("rage") || lower.contains("frustration") ->
-                "I've tailored the opening with high-intensity Rage emotion! We open on frustrated developer pain points, followed by a dramatic silence and whispered secret reveal of ${brand.name}."
-            lower.contains("voice") || lower.contains("adam") || lower.contains("daniel") ->
-                "Great choice. Adam brings that cinematic, gritty movie-trailer presence with deep resonance, while Daniel offers broadcast-grade polish. I've tuned the base pitch and cadences accordingly."
-            lower.contains("speed") || lower.contains("transition") ->
-                "Shortening scene durations to 2.5–3.0 seconds creates a hyper-engaging pace suitable for TikTok and Instagram Reels. We'll use the Metallic Swoosh transition for maximum velocity shine!"
-            lower.contains("cta") || lower.contains("fastsolve") || lower.contains("logo") ->
-                "I've updated the final scene to trigger an explosive starburst particle reveal of ${brand.name} with a high-contrast pulsing CTA button leading directly to the repository."
-            else ->
-                "Understood! I've calibrated the creative direction for ${brand.name}: using the ${brand.techStack.firstOrNull() ?: "React"} theme, snappy 3-second scenes, and responsive dual-format layouts for 16:9 Landscape and 9:16 Portrait."
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Motion directive generation timed out", e)
+            Result.failure(Exception("Motion directive timed out after 60 seconds.", e))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Firebase AI motion directive failed", e)
+            Result.failure(e)
         }
     }
-
-    private fun String.capitalizeWords(): String =
-        split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
 }

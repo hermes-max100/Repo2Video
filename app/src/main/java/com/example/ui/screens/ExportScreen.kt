@@ -654,10 +654,12 @@ fun ExportScreen(
                                 onClick = {
                                     if (isGoogleAuthenticated) {
                                         viewModel.syncCurrentProjectToCloud()
-                                        Toast.makeText(context, "Project synced to matrix-decoded cloud!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Syncing project to Cloud Firestore...", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        viewModel.signInWithConfirmedGoogleAccount()
-                                        Toast.makeText(context, "Signed in with DevDirector OAuth identity!", Toast.LENGTH_SHORT).show()
+                                        val act = context as? android.app.Activity
+                                        if (act != null) {
+                                            viewModel.signInWithGoogle(act)
+                                        }
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(
