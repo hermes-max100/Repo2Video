@@ -1068,7 +1068,7 @@ fun StudioEditorScreen(
                                             Text("Metric Number", style = MaterialTheme.typography.labelSmall, color = TextMuted)
                                             Spacer(modifier = Modifier.height(4.dp))
                                             OutlinedTextField(
-                                                value = currentScene.metricNumber ?: "50,000+",
+                                                value = currentScene.metricNumber ?: "",
                                                 onValueChange = { viewModel.updateScene(activeSceneIndex, currentScene.copy(metricNumber = it)) },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 shape = RoundedCornerShape(16.dp),
@@ -1226,13 +1226,15 @@ fun StudioEditorScreen(
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
 
-                                // Veo 3 Video Generator Button
+                                // OpenMontage scene render button (VPS Remotion + Piper).
+                                // The dead Veo 3 button lived here; Veo 3.1 fast-preview
+                                // was retired Oct 22, 2026.
                                 Button(
-                                    onClick = { viewModel.generateVeoVideoForScene(activeSceneIndex) },
+                                    onClick = { viewModel.generateOpenMontageClipForScene(activeSceneIndex) },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0x1AFFFFFF)),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
                                     shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("generate_veo_clip_button")
+                                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("render_openmontage_clip_button")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.VideoCameraBack,
@@ -1241,7 +1243,7 @@ fun StudioEditorScreen(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Generate Veo 3 Video Clip for Scene", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                    Text("Render Scene with OpenMontage", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                                 }
                             }
                         }

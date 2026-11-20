@@ -246,6 +246,7 @@ class GeminiPromoService {
                 Key Features: ${brand.keyFeatures.joinToString(", ")}
                 Tech Stack: ${brand.techStack.joinToString(", ")}
                 Target Audience: ${brand.targetAudience}
+                Metric rule: only include metricNumber/metricLabel when the number is verified from the repository (e.g. GitHub stars). Never invent a metric number.
             """.trimIndent()
 
             val response = withTimeout(INFERENCE_TIMEOUT_MS) {
@@ -272,6 +273,14 @@ class GeminiPromoService {
                     }
                     val emotionRaw = sc.optString("emotionalPreset", "CONFIDENT")
                     val visualRaw = sc.optString("visualType", "BROWSER_MOCKUP_3D")
+                    val visualType = enumValues<SceneVisualType>()
+                        .firstOrNull { it.name == visualRaw } ?: SceneVisualType.BROWSER_MOCKUP_3D
+                    // A metric is only shown when the brand carries a verified
+                    // number. The model may invent one — never pass its number
+                    // through unchecked, and only on METRIC_COUNTER scenes.
+                    val isMetricScene = visualType == SceneVisualType.METRIC_COUNTER
+                    val metricNumber = if (isMetricScene) brand.verifiedMetricNumber else null
+                    val metricLabel = if (isMetricScene) brand.verifiedMetricLabel else null
 
                     add(
                         PromoScene(
@@ -283,12 +292,11 @@ class GeminiPromoService {
                             emotionalPreset = enumValues<EmotionalPreset>()
                                 .firstOrNull { it.name == emotionRaw } ?: EmotionalPreset.CONFIDENT,
                             durationSeconds = sc.optDouble("durationSeconds", 3.5).toFloat().coerceIn(2.0f, 8.0f),
-                            visualType = enumValues<SceneVisualType>()
-                                .firstOrNull { it.name == visualRaw } ?: SceneVisualType.BROWSER_MOCKUP_3D,
+                            visualType = visualType,
                             accentTag = sc.optString("accentTag", "FEATURE"),
                             codeSnippet = sc.optString("codeSnippet", "").takeIf { it.isNotBlank() && it != "null" },
-                            metricNumber = sc.optString("metricNumber", "").takeIf { it.isNotBlank() && it != "null" },
-                            metricLabel = sc.optString("metricLabel", "").takeIf { it.isNotBlank() && it != "null" },
+                            metricNumber = metricNumber,
+                            metricLabel = metricLabel,
                             badgeTags = badges,
                             ctaButtonText = sc.optString("ctaButtonText", "").takeIf { it.isNotBlank() && it != "null" },
                             ctaUrl = sc.optString("ctaUrl", "").takeIf { it.isNotBlank() && it != "null" }

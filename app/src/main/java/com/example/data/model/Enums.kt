@@ -135,7 +135,7 @@ enum class EmotionalPreset(
     WARM(
         label = "Warm",
         description = "High stability, smooth cadence",
-        sampleQuote = "\"Join over 50,000 developers building faster.\"",
+        sampleQuote = "\"Turn your repo into a launch video.\"",
         pitchMultiplier = 1.05f,
         rateMultiplier = 0.96f,
         elevenLabsStability = 0.70f,
@@ -229,7 +229,7 @@ enum class SceneVisualType(
     FEATURE_SPOTLIGHT("Feature Spotlight", "Floating 3D glass cards with neon glowing feature badges"),
     METRIC_COUNTER("Metric Counter", "Rapid counter animation with performance proof badges"),
     LOGO_REVEAL_CTA("Logo Reveal & CTA", "Radial starburst particle glow, logo scale spring, CTA button"),
-    VEO_AI_VIDEO("Veo AI Clip", "Cinematic AI-generated background video animation")
+    OPENMONTAGE_RENDER("OpenMontage Render", "VPS-rendered scene clip (Remotion + Piper)")
 }
 
 enum class AiEngine(

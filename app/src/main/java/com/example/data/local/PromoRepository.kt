@@ -205,15 +205,15 @@ class PromoRepository(private val promoDao: PromoDao) {
                 ),
                 PromoScene(
                     orderIndex = 3,
-                    title = "100% Production Ready",
+                    title = "Ready to Render",
                     subtitle = "Instant Multiplatform Reach",
-                    voiceover = "Join thousands of developers turning git repositories into high-converting launch videos.",
+                    voiceover = "Turn a git repository into a high-converting launch video.",
                     emotionalPreset = EmotionalPreset.WARM,
                     durationSeconds = 3.2f,
                     visualType = SceneVisualType.METRIC_COUNTER,
                     accentTag = "PROOF",
-                    metricNumber = "50,000+",
-                    metricLabel = "Videos Rendered on Remotion",
+                    metricNumber = null,
+                    metricLabel = null,
                     badgeTags = listOf("4K Output", "Whisper Timing", "Zero Overlap")
                 ),
                 PromoScene(

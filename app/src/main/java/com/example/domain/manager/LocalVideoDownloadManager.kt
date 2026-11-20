@@ -16,23 +16,31 @@ import com.example.data.model.DownloadDestination
 import com.example.data.model.PromoScene
 import com.example.data.model.VideoDownloadResult
 import com.example.data.model.VideoQuality
+import com.example.service.HttpOpenMontageRenderService
+import com.example.service.OpenMontageRenderService
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
-import java.io.DataOutputStream
 import java.io.File
-import java.io.FileOutputStream
-import java.nio.charset.StandardCharsets
 
 /**
- * Enterprise-grade Video Download & Storage Manager for DevDirector.
+ * Video Download & Storage Manager for DevDirector.
  *
- * Saves final rendered promo videos to device local storage (Movies / Gallery or Downloads)
- * using modern Scoped Storage (MediaStore.Video.Media / MediaStore.Downloads) on Android 10+ (API 29+)
- * with zero required permissions, and backward compatibility on Android 9 and lower.
+ * Renders the promo on the IONOS VPS via the OpenMontage render service
+ * (Remotion + ffmpeg + Piper TTS — free path) and saves the real rendered
+ * MP4 to device local storage (Movies / Gallery or Downloads) using modern
+ * Scoped Storage (MediaStore.Video.Media / MediaStore.Downloads) on
+ * Android 10+ (API 29+) with zero required permissions, and backward
+ * compatibility on Android 9 and lower.
+ *
+ * A render either produces a real rendered file from the VPS or fails with
+ * an honest error. This class never synthesizes video bytes on-device: the
+ * old synthesizeMp4File writer (fake ftyp/moov/mdat boxes with a
+ * "dummyFrame" payload) was deleted as part of the OpenMontage repair.
  */
-class LocalVideoDownloadManager(private val context: Context) {
+class LocalVideoDownloadManager(
+    private val context: Context,
+    private val renderService: OpenMontageRenderService = HttpOpenMontageRenderService()
+) {
 
     companion object {
         private const val TAG = "VideoDownloadManager"
@@ -51,12 +59,10 @@ class LocalVideoDownloadManager(private val context: Context) {
         onProgress: (percent: Int, stage: String) -> Unit = { _, _ -> }
     ): VideoDownloadResult = withContext(Dispatchers.IO) {
         try {
-            onProgress(5, "Initializing render pipeline for ${aspectRatio.displayName}...")
-            delay(80)
+            onProgress(5, "Initializing render for ${aspectRatio.displayName}...")
 
             // 1. Calculate resolution and duration
             val (width, height) = calculateResolution(aspectRatio, quality)
-            val durationSeconds = scenes.fold(0f) { acc, s -> acc + s.durationSeconds }.toInt().coerceAtLeast(10)
             val cleanBrand = (customBaseName ?: brand.name)
                 .lowercase()
                 .replace("[^a-z0-9_]+".toRegex(), "_")
@@ -71,35 +77,33 @@ class LocalVideoDownloadManager(private val context: Context) {
             val qualitySlug = quality.name.lowercase()
             val fileName = "${cleanBrand}_${formatSlug}_${qualitySlug}_$timestamp.mp4"
 
-            onProgress(20, "Composing Remotion master scenes (${width}x${height} @ ${quality.targetFps}fps)...")
-            delay(120)
-
-            // 2. Build MP4 Video Payload
+            // 2. Render for real on the OpenMontage VPS (Remotion + Piper).
+            // A failure here is reported honestly — no fake file is produced.
             val cacheDir = File(context.cacheDir, "promo_renders").apply { if (!exists()) mkdirs() }
             val tempFile = File(cacheDir, "temp_$fileName")
 
-            onProgress(45, "Encoding H.264 video bitstream with brand color grading...")
-            delay(150)
-
-            // Synthesize compliant MP4 binary with proper ISO box structure and video/audio tracks
-            synthesizeMp4File(
-                outputFile = tempFile,
+            val renderResult = renderService.renderPromo(
                 brand = brand,
                 scenes = scenes,
-                width = width,
-                height = height,
-                durationSeconds = durationSeconds,
-                fps = quality.targetFps,
-                quality = quality
+                aspectRatio = aspectRatio,
+                outputFile = tempFile,
+                onProgress = { pct, stage -> onProgress(pct, stage) }
             )
+            if (renderResult.isFailure) {
+                throw IllegalStateException(
+                    renderResult.exceptionOrNull()?.message
+                        ?: "OpenMontage render failed for an unknown reason."
+                )
+            }
+            val rendered = renderResult.getOrThrow()
+            // Trust the renderer's verified output, not the scene estimates.
+            val durationSeconds = rendered.durationSeconds.toInt().coerceAtLeast(1)
+            val renderedResolution = rendered.resolution.ifBlank { "${width}x${height}" }
 
-            onProgress(75, "Multiplexing stereo audio bed & mastering volume...")
-            delay(100)
-
+            onProgress(75, "Rendered ${rendered.frames} frames on the VPS, saving to device...")
             val fileSizeBytes = tempFile.length()
 
             onProgress(88, "Writing to device local storage (${destination.displayName})...")
-            delay(80)
 
             // 3. Save to Public Device Storage via MediaStore or Filesystem
             val savedLocation = writeToPublicStorage(
@@ -125,7 +129,7 @@ class LocalVideoDownloadManager(private val context: Context) {
                 aspectRatio = aspectRatio,
                 destinationFolder = destination.displayName,
                 durationSeconds = durationSeconds,
-                resolution = "${width}x${height}",
+                resolution = renderedResolution,
                 timestamp = timestamp
             )
         } catch (e: Exception) {
@@ -297,219 +301,6 @@ class LocalVideoDownloadManager(private val context: Context) {
         }
 
         return StorageLocation(uri = fileUri, displayPath = finalFile.absolutePath)
-    }
-
-    /**
-     * Synthesizes an ISO/IEC 14496-14 compliant MP4 file structure with FTYP, MOOV, and MDAT boxes.
-     * Guaranteed to produce valid, non-empty video container bytes on any device or test environment.
-     */
-    private fun synthesizeMp4File(
-        outputFile: File,
-        brand: BrandProfile,
-        scenes: List<PromoScene>,
-        width: Int,
-        height: Int,
-        durationSeconds: Int,
-        fps: Int,
-        quality: VideoQuality
-    ) {
-        FileOutputStream(outputFile).use { fos ->
-            val out = DataOutputStream(fos)
-
-            // 1. Box: ftyp (File Type Box)
-            // Major brand: isom, minor: 0x00000200, compatible: isom, iso2, avc1, mp41
-            val ftypPayload = ByteArrayOutputStream().apply {
-                write("isom".toByteArray(StandardCharsets.US_ASCII))
-                DataOutputStream(this).writeInt(0x00000200)
-                write("isom".toByteArray(StandardCharsets.US_ASCII))
-                write("iso2".toByteArray(StandardCharsets.US_ASCII))
-                write("avc1".toByteArray(StandardCharsets.US_ASCII))
-                write("mp41".toByteArray(StandardCharsets.US_ASCII))
-            }.toByteArray()
-            writeBox(out, "ftyp", ftypPayload)
-
-            // 2. Box: moov (Movie Metadata Box)
-            val moovPayload = buildMoovBox(brand, scenes, width, height, durationSeconds, fps)
-            writeBox(out, "moov", moovPayload)
-
-            // 3. Box: mdat (Media Data Box)
-            // Writes formatted H.264 video payload representing the scenes and audio stream
-            val mdatHeader = ByteArrayOutputStream()
-            val mdatDataOut = DataOutputStream(mdatHeader)
-
-            // Write scene markers and payload chunk
-            val sceneSummary = scenes.joinToString("\n") {
-                "[SCENE #${it.orderIndex + 1}: ${it.title} (${it.durationSeconds}s) | ${it.visualType.displayName}]"
-            }
-            val watermark = "DevDirector Autonomous Remotion Render | ${brand.name} | ${width}x${height}@${fps}fps"
-            val textBytes = "$watermark\n$sceneSummary\n".toByteArray(StandardCharsets.UTF_8)
-            mdatDataOut.write(textBytes)
-
-            // Generate realistic visual and audio payload scaled to quality (e.g. 1.2MB - 3.5MB)
-            val targetPayloadSize = when (quality) {
-                VideoQuality.UHD_4K -> 3_500_000
-                VideoQuality.FHD_1080P -> 1_800_000
-                VideoQuality.HD_720P -> 900_000
-            }
-            val dummyFrame = ByteArray(4096) { idx ->
-                // Gradient pattern representation with AVC NAL prefix
-                if (idx < 4) (if (idx == 3) 1 else 0).toByte() else ((idx + 37) % 256).toByte()
-            }
-            var written = textBytes.size
-            while (written < targetPayloadSize) {
-                val chunkSize = minOf(dummyFrame.size, targetPayloadSize - written)
-                mdatDataOut.write(dummyFrame, 0, chunkSize)
-                written += chunkSize
-            }
-
-            val mdatBytes = mdatHeader.toByteArray()
-            writeBox(out, "mdat", mdatBytes)
-            out.flush()
-        }
-    }
-
-    private fun buildMoovBox(
-        brand: BrandProfile,
-        scenes: List<PromoScene>,
-        width: Int,
-        height: Int,
-        durationSeconds: Int,
-        fps: Int
-    ): ByteArray {
-        val bos = ByteArrayOutputStream()
-        val dos = DataOutputStream(bos)
-
-        val timescale = 1000
-        val durationUnits = durationSeconds * timescale
-
-        // mvhd (Movie Header Box)
-        val mvhdBos = ByteArrayOutputStream()
-        val mvhdDos = DataOutputStream(mvhdBos)
-        mvhdDos.writeInt(0) // version = 0, flags = 0
-        mvhdDos.writeInt(0) // creation time
-        mvhdDos.writeInt(0) // modification time
-        mvhdDos.writeInt(timescale)
-        mvhdDos.writeInt(durationUnits)
-        mvhdDos.writeInt(0x00010000) // rate 1.0
-        mvhdDos.writeShort(0x0100)   // volume 1.0
-        mvhdDos.write(ByteArray(10)) // reserved
-        // Unity Matrix (36 bytes)
-        val matrix = intArrayOf(
-            0x00010000, 0, 0,
-            0, 0x00010000, 0,
-            0, 0, 0x40000000
-        )
-        for (m in matrix) mvhdDos.writeInt(m)
-        mvhdDos.write(ByteArray(24)) // pre-defined
-        mvhdDos.writeInt(2) // next track ID
-        writeBox(dos, "mvhd", mvhdBos.toByteArray())
-
-        // trak (Video Track Box)
-        val trakBos = ByteArrayOutputStream()
-        val trakWt = DataOutputStream(trakBos)
-
-        // tkhd (Track Header Box)
-        val tkhdBos = ByteArrayOutputStream()
-        val tkhdDos = DataOutputStream(tkhdBos)
-        tkhdDos.writeInt(0x0000000F) // flags: enabled | in_movie | in_preview
-        tkhdDos.writeInt(0) // creation
-        tkhdDos.writeInt(0) // modification
-        tkhdDos.writeInt(1) // track ID 1
-        tkhdDos.writeInt(0) // reserved
-        tkhdDos.writeInt(durationUnits)
-        tkhdDos.write(ByteArray(8)) // reserved
-        tkhdDos.writeShort(0) // layer
-        tkhdDos.writeShort(0) // alternate group
-        tkhdDos.writeShort(0) // volume 0 for video
-        tkhdDos.writeShort(0) // reserved
-        for (m in matrix) tkhdDos.writeInt(m)
-        tkhdDos.writeInt(width shl 16)  // width in 16.16 fixed point
-        tkhdDos.writeInt(height shl 16) // height in 16.16 fixed point
-        writeBox(trakWt, "tkhd", tkhdBos.toByteArray())
-
-        // mdia (Media Box)
-        val mdiaBos = ByteArrayOutputStream()
-        val mdiaDos = DataOutputStream(mdiaBos)
-
-        // mdhd (Media Header)
-        val mdhdBos = ByteArrayOutputStream()
-        val mdhdDos = DataOutputStream(mdhdBos)
-        mdhdDos.writeInt(0)
-        mdhdDos.writeInt(0)
-        mdhdDos.writeInt(0)
-        mdhdDos.writeInt(timescale)
-        mdhdDos.writeInt(durationUnits)
-        mdhdDos.writeShort(0x55C4) // Language code (und)
-        mdhdDos.writeShort(0)      // pre-defined
-        writeBox(mdiaDos, "mdhd", mdhdBos.toByteArray())
-
-        // hdlr (Handler Reference)
-        val hdlrBos = ByteArrayOutputStream()
-        val hdlrDos = DataOutputStream(hdlrBos)
-        hdlrDos.writeInt(0)
-        hdlrDos.writeInt(0) // pre-defined
-        hdlrDos.write("vide".toByteArray(StandardCharsets.US_ASCII)) // handler type
-        hdlrDos.write(ByteArray(12)) // reserved
-        hdlrDos.write("DevDirector Video Handler\u0000".toByteArray(StandardCharsets.US_ASCII))
-        writeBox(mdiaDos, "hdlr", hdlrBos.toByteArray())
-
-        // minf (Media Information Box)
-        val minfBos = ByteArrayOutputStream()
-        val minfDos = DataOutputStream(minfBos)
-
-        // vmhd (Video Media Header)
-        val vmhdBos = ByteArrayOutputStream()
-        val vmhdDos = DataOutputStream(vmhdBos)
-        vmhdDos.writeInt(1) // flags = 1
-        vmhdDos.writeShort(0) // graphics mode
-        vmhdDos.writeShort(0) // opcolor red
-        vmhdDos.writeShort(0) // opcolor green
-        vmhdDos.writeShort(0) // opcolor blue
-        writeBox(minfDos, "vmhd", vmhdBos.toByteArray())
-
-        // dinf (Data Information)
-        val dinfBos = ByteArrayOutputStream()
-        val dinfDos = DataOutputStream(dinfBos)
-        val drefBos = ByteArrayOutputStream()
-        val drefDos = DataOutputStream(drefBos)
-        drefDos.writeInt(0)
-        drefDos.writeInt(1) // entry count = 1
-        val urlBos = ByteArrayOutputStream()
-        val urlDos = DataOutputStream(urlBos)
-        urlDos.writeInt(1) // flags = 1 (self-contained)
-        writeBox(drefDos, "url ", urlBos.toByteArray())
-        writeBox(dinfDos, "dref", drefBos.toByteArray())
-        writeBox(minfDos, "dinf", dinfBos.toByteArray())
-
-        // stbl (Sample Table Box)
-        val stblBos = ByteArrayOutputStream()
-        val stblDos = DataOutputStream(stblBos)
-        writeEmptyTableBox(stblDos, "stts") // time to sample
-        writeEmptyTableBox(stblDos, "stsc") // sample to chunk
-        writeEmptyTableBox(stblDos, "stsz") // sample sizes
-        writeEmptyTableBox(stblDos, "stco") // chunk offsets
-        writeBox(minfDos, "stbl", stblBos.toByteArray())
-
-        writeBox(mdiaDos, "minf", minfBos.toByteArray())
-        writeBox(trakWt, "mdia", mdiaBos.toByteArray())
-        writeBox(dos, "trak", trakBos.toByteArray())
-
-        return bos.toByteArray()
-    }
-
-    private fun writeEmptyTableBox(dos: DataOutputStream, boxType: String) {
-        val bos = ByteArrayOutputStream()
-        val dt = DataOutputStream(bos)
-        dt.writeInt(0) // version & flags
-        dt.writeInt(0) // entry count
-        writeBox(dos, boxType, bos.toByteArray())
-    }
-
-    private fun writeBox(dos: DataOutputStream, type: String, payload: ByteArray) {
-        val totalSize = 8 + payload.size
-        dos.writeInt(totalSize)
-        dos.write(type.toByteArray(StandardCharsets.US_ASCII))
-        dos.write(payload)
     }
 
     private fun calculateResolution(aspectRatio: AspectRatioFormat, quality: VideoQuality): Pair<Int, Int> {

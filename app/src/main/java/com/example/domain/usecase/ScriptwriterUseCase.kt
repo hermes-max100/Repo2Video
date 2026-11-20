@@ -81,7 +81,8 @@ class ScriptwriterUseCase {
 
             // Enforce max characters per voiceover
             val clampedVoiceover = voiceover.take(MAX_VOICEOVER_CHARS_PER_SCENE)
-            val isVerified = claim?.isVerified ?: true
+            // A line with no linked claim is NOT verified by default.
+            val isVerified = claim?.isVerified ?: false
 
             scriptLines.add(
                 ScriptLine(

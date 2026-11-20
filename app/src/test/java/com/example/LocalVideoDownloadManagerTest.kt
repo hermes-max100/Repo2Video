@@ -9,8 +9,10 @@ import com.example.data.model.PromoScene
 import com.example.data.model.SceneVisualType
 import com.example.data.model.VideoQuality
 import com.example.domain.manager.LocalVideoDownloadManager
+import com.example.service.OpenMontageRenderService
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -22,12 +24,16 @@ import java.io.File
 
 /**
  * Tests verifying the download and local device storage functionality:
- * 1. MP4 Generation with valid H.264/ISOBMFF structure
- * 2. Resolution, bitrates, and aspect ratio calibration
- * 3. MediaStore and legacy file system storage support
- * 4. Multi-format batch saving (16:9, 9:16, 1:1)
- * 5. Share and View intent generation with FileProvider compatibility
- * 6. Progress reporting across rendering, encoding, and disk persistence
+ * 1. Real renders come from the injected render service — the saved file must
+ *    contain exactly the renderer's bytes (provenance), never synthesized
+ *    on-device bytes.
+ * 2. Unsupported aspects (9:16, 1:1) fail honestly instead of producing a
+ *    fake file.
+ * 3. A render-service failure propagates as an honest failure result.
+ * 4. MediaStore and legacy file system storage support.
+ * 5. Multi-format batch saving (16:9 succeeds; 9:16 and 1:1 fail honestly).
+ * 6. Share and View intent generation with FileProvider compatibility.
+ * 7. Progress reporting across rendering, encoding, and disk persistence.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -35,6 +41,56 @@ class LocalVideoDownloadManagerTest {
 
     private lateinit var context: Context
     private lateinit var downloadManager: LocalVideoDownloadManager
+
+    companion object {
+        // Marker bytes the fake renderer writes, so tests can prove the saved
+        // file came from the renderer and was not synthesized on-device.
+        val RENDER_MARKER = "OPENMONTAGE-RENDER-TEST".toByteArray(Charsets.UTF_8)
+    }
+
+    /**
+     * Stand-in for HttpOpenMontageRenderService. Writes a minimal MP4-shaped
+     * payload (ftyp box + marker) to the output file and reports the job
+     * result, or fails honestly for unsupported aspects / injected errors.
+     */
+    private class FakeRenderService(
+        private val failAspects: Set<AspectRatioFormat> = emptySet(),
+        private val failWith: String? = null
+    ) : OpenMontageRenderService {
+
+        override suspend fun renderPromo(
+            brand: BrandProfile,
+            scenes: List<PromoScene>,
+            aspectRatio: AspectRatioFormat,
+            outputFile: File,
+            onProgress: (percent: Int, stage: String) -> Unit
+        ): Result<OpenMontageRenderService.RenderJobResult> {
+            if (failWith != null) {
+                return Result.failure(IllegalStateException(failWith))
+            }
+            if (aspectRatio in failAspects) {
+                return Result.failure(
+                    IllegalArgumentException(
+                        "Aspect ${aspectRatio.displayName} is not supported: " +
+                            "the VPS Explainer composition renders 1920x1080 only."
+                    )
+                )
+            }
+            val header = byteArrayOf(0, 0, 0, 24) + "ftypisom".toByteArray(Charsets.US_ASCII)
+            outputFile.writeBytes(header + RENDER_MARKER)
+            return Result.success(
+                OpenMontageRenderService.RenderJobResult(
+                    jobId = "test-job",
+                    durationSeconds = scenes.sumOf { it.durationSeconds.toDouble() },
+                    fps = 30,
+                    resolution = "1920x1080",
+                    frames = 900,
+                    hasAudio = true,
+                    sizeBytes = outputFile.length()
+                )
+            )
+        }
+    }
 
     private val testBrand = BrandProfile(
         name = "DevDirector",
@@ -76,7 +132,15 @@ class LocalVideoDownloadManagerTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        downloadManager = LocalVideoDownloadManager(context)
+        downloadManager = LocalVideoDownloadManager(
+            context,
+            renderService = FakeRenderService(
+                failAspects = setOf(
+                    AspectRatioFormat.PORTRAIT_9_16,
+                    AspectRatioFormat.SQUARE_1_1
+                )
+            )
+        )
     }
 
     @Test
@@ -100,14 +164,26 @@ class LocalVideoDownloadManagerTest {
         assertEquals("Progress should reach 100", 100, lastProgress)
         assertTrue("Stage list should be populated", stageList.isNotEmpty())
         assertTrue("File name should include 16x9", result.fileName.contains("16x9_landscape"))
-        assertTrue("File size should be greater than zero", result.fileSizeBytes > 1000)
+        assertTrue("File size should be greater than zero", result.fileSizeBytes > 0)
         assertEquals("Resolution should be 1920x1080", "1920x1080", result.resolution)
         assertEquals("MIME type should be video/mp4", "video/mp4", result.mimeType)
         assertNotNull("Local path should not be null", result.localPath)
+
+        // Provenance: the saved file must be exactly the renderer's bytes.
+        val savedBytes = File(result.localPath).readBytes()
+        val markerText = String(savedBytes, Charsets.UTF_8)
+        assertTrue(
+            "Saved file must contain the renderer's marker bytes",
+            markerText.contains("OPENMONTAGE-RENDER-TEST")
+        )
+        assertFalse(
+            "Saved file must not contain the old synthetic watermark",
+            markerText.contains("DevDirector Autonomous Remotion Render")
+        )
     }
 
     @Test
-    fun testDownloadPortraitVideoSucceeds() = runBlocking {
+    fun testDownloadPortraitVideoFailsHonestly() = runBlocking {
         val result = downloadManager.saveVideoToDeviceStorage(
             brand = testBrand,
             scenes = testScenes,
@@ -116,14 +192,16 @@ class LocalVideoDownloadManagerTest {
             destination = DownloadDestination.DOWNLOADS
         )
 
-        assertTrue("Portrait download should succeed", result.success)
-        assertTrue("File name should indicate 9x16 portrait", result.fileName.contains("9x16_portrait"))
-        assertEquals("Resolution should be 1080x1920", "1080x1920", result.resolution)
-        assertTrue("Destination folder should be Download", result.destinationFolder.contains("Download"))
+        assertFalse("Portrait download must fail — no vertical renderer exists yet", result.success)
+        assertNotNull("Failure must carry an honest error message", result.errorMessage)
+        assertTrue(
+            "Error must name the unsupported aspect",
+            result.errorMessage!!.contains("9:16") || result.errorMessage!!.contains("not supported")
+        )
     }
 
     @Test
-    fun testDownloadSquareVideoSucceeds() = runBlocking {
+    fun testDownloadSquareVideoFailsHonestly() = runBlocking {
         val result = downloadManager.saveVideoToDeviceStorage(
             brand = testBrand,
             scenes = testScenes,
@@ -132,9 +210,8 @@ class LocalVideoDownloadManagerTest {
             destination = DownloadDestination.MOVIES
         )
 
-        assertTrue("Square 4K download should succeed", result.success)
-        assertTrue("File name should indicate 1x1 square", result.fileName.contains("1x1_square"))
-        assertEquals("Resolution should be 2160x2160", "2160x2160", result.resolution)
+        assertFalse("Square download must fail — no square renderer exists yet", result.success)
+        assertNotNull("Failure must carry an honest error message", result.errorMessage)
     }
 
     @Test
@@ -150,14 +227,46 @@ class LocalVideoDownloadManagerTest {
             }
         )
 
-        assertEquals("Should save all 3 formats", 3, results.size)
-        assertTrue("All formats should succeed", results.all { it.success })
+        assertEquals("Should return all 3 format results", 3, results.size)
         assertTrue("Progress stages should be logged", progressStages.isNotEmpty())
 
-        val aspectRatios = results.map { it.aspectRatio }.toSet()
-        assertTrue("Should include 16:9", aspectRatios.contains(AspectRatioFormat.LANDSCAPE_16_9))
-        assertTrue("Should include 9:16", aspectRatios.contains(AspectRatioFormat.PORTRAIT_9_16))
-        assertTrue("Should include 1:1", aspectRatios.contains(AspectRatioFormat.SQUARE_1_1))
+        val byAspect = results.associateBy { it.aspectRatio }
+        assertTrue(
+            "Landscape 16:9 must succeed",
+            byAspect[AspectRatioFormat.LANDSCAPE_16_9]?.success == true
+        )
+        assertFalse(
+            "Portrait 9:16 must fail honestly",
+            byAspect[AspectRatioFormat.PORTRAIT_9_16]?.success == true
+        )
+        assertFalse(
+            "Square 1:1 must fail honestly",
+            byAspect[AspectRatioFormat.SQUARE_1_1]?.success == true
+        )
+        assertNotNull(
+            "Portrait failure must carry an error message",
+            byAspect[AspectRatioFormat.PORTRAIT_9_16]?.errorMessage
+        )
+    }
+
+    @Test
+    fun testRenderFailureReturnsHonestError() = runBlocking {
+        val failingManager = LocalVideoDownloadManager(
+            context,
+            renderService = FakeRenderService(failWith = "Remotion render failed (rc=1): boom")
+        )
+        val result = failingManager.saveVideoToDeviceStorage(
+            brand = testBrand,
+            scenes = testScenes,
+            aspectRatio = AspectRatioFormat.LANDSCAPE_16_9
+        )
+
+        assertFalse("A failed render must not report success", result.success)
+        assertNotNull("Failure must carry the renderer's error", result.errorMessage)
+        assertTrue(
+            "Error must pass through the renderer's message",
+            result.errorMessage!!.contains("Remotion render failed")
+        )
     }
 
     @Test
@@ -177,6 +286,13 @@ class LocalVideoDownloadManagerTest {
         file.inputStream().use { it.read(bytes) }
         val ftypString = String(bytes, 4, 4, Charsets.US_ASCII)
         assertEquals("File must contain ftyp box indicator", "ftyp", ftypString)
+
+        // And the bytes must be the renderer's, not synthesized on-device.
+        val markerText = String(file.readBytes(), Charsets.UTF_8)
+        assertTrue(
+            "Saved file must contain the renderer's marker bytes",
+            markerText.contains("OPENMONTAGE-RENDER-TEST")
+        )
     }
 
     @Test

@@ -914,24 +914,35 @@ private fun RenderSceneVisual(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    val rawNumber = scene.metricNumber ?: "50,000+"
-                    Text(
-                        text = rawNumber,
-                        fontSize = if (isPortrait) 38.sp else 46.sp,
-                        fontWeight = FontWeight.Black,
-                        color = primaryColor,
-                        letterSpacing = (-1).sp
-                    )
+                    // A metric is only shown when the scene carries a verified
+                    // number. No number means no invented "50,000+" fallback.
+                    if (scene.metricNumber != null) {
+                        Text(
+                            text = scene.metricNumber,
+                            fontSize = if (isPortrait) 38.sp else 46.sp,
+                            fontWeight = FontWeight.Black,
+                            color = primaryColor,
+                            letterSpacing = (-1).sp
+                        )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
-                    Text(
-                        text = scene.metricLabel ?: "Videos Rendered by Developers Worldwide",
-                        fontSize = 13.sp,
-                        color = TextSecondary,
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Medium
-                    )
+                        Text(
+                            text = scene.metricLabel ?: "",
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else {
+                        Text(
+                            text = "No verified metric for this scene",
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
@@ -1027,8 +1038,10 @@ private fun RenderSceneVisual(
             }
         }
 
-        SceneVisualType.VEO_AI_VIDEO -> {
-            // Veo AI Video Clip Simulation
+        SceneVisualType.OPENMONTAGE_RENDER -> {
+            // OpenMontage scene clip, rendered on the VPS (Remotion + Piper).
+            // Shows the real rendered file when one is attached — never a
+            // simulation placeholder.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1044,7 +1057,7 @@ private fun RenderSceneVisual(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Veo 3 AI Video Generation",
+                        text = "OpenMontage Render",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -1053,6 +1066,14 @@ private fun RenderSceneVisual(
                         text = "Aspect Ratio: ${if (isPortrait) "9:16 (Portrait)" else "16:9 (Landscape)"}",
                         fontSize = 11.sp,
                         color = AccentCyan
+                    )
+                    val clipName = scene.generatedVideoUrl
+                        ?.substringAfterLast("/")
+                        ?.takeIf { it.isNotBlank() }
+                    Text(
+                        text = clipName?.let { "Clip: $it" } ?: "No render attached yet",
+                        fontSize = 11.sp,
+                        color = TextSecondary
                     )
                 }
             }

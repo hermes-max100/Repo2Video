@@ -1,6 +1,5 @@
 package com.example.domain.usecase
 
-import com.example.data.model.ClaimEvidence
 import com.example.data.model.ContentSafetyCheck
 import com.example.data.model.CreativeBrief
 import com.example.data.model.DeterministicScanManifest
@@ -89,19 +88,10 @@ class CreativePlannerUseCase {
 
         val cta = "Star ${manifest.appName} on GitHub today".take(MAX_CTA_LENGTH)
 
-        // Ensure every claim in brief is linked to evidence from manifest
-        val validatedClaims = manifest.claimsWithEvidence.ifEmpty {
-            listOf(
-                ClaimEvidence(
-                    claimText = "Built with modern developer ergonomics",
-                    sourceFile = "package.json",
-                    lineReference = "dependencies",
-                    evidenceSnippet = manifest.technologies.joinToString(", "),
-                    isVerified = true,
-                    verificationNotes = "Derived from detected tech stack"
-                )
-            )
-        }
+        // Only claims the manifest actually verified. When the manifest has
+        // no verified claims, the brief has none either — never invent a
+        // fallback claim and mark it verified.
+        val validatedClaims = manifest.claimsWithEvidence
 
         val brief = CreativeBrief(
             title = manifest.appName,

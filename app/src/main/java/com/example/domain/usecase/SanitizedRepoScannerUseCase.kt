@@ -92,13 +92,22 @@ class SanitizedRepoScannerUseCase {
 
     /**
      * Constructs a deterministic, compact scan manifest that the user can verify/edit.
+     *
+     * Honesty rule: a claim is only listed when its evidence was actually
+     * found in [sourceText] — the repository content the user supplied.
+     * Nothing is ever marked verified from a hardcoded snippet, and no
+     * default tech stack or feature list is invented when detection finds
+     * nothing: empty detection means an empty manifest section, not a
+     * plausible-looking guess. Callers must pass the real supplied source
+     * text; an empty [sourceText] yields zero verified claims.
      */
     fun createDeterministicManifest(
         repoUrl: String,
         sanitizedPayload: SanitizedPayload,
         customAppName: String? = null,
         detectedTech: List<String> = emptyList(),
-        detectedFeatures: List<String> = emptyList()
+        detectedFeatures: List<String> = emptyList(),
+        sourceText: String = ""
     ): DeterministicScanManifest {
         val (isValid, normalized) = UrlValidator.validateRepoInput(repoUrl)
         val repoSegments = (if (isValid) normalized else repoUrl).split('/').filter { it.isNotBlank() }
@@ -107,42 +116,41 @@ class SanitizedRepoScannerUseCase {
                 word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
             } ?: "Developer Tool"
 
-        val tech = if (detectedTech.isNotEmpty()) detectedTech else listOf("TypeScript", "React", "Remotion", "Tailwind CSS")
-        val features = if (detectedFeatures.isNotEmpty()) detectedFeatures else listOf(
-            "Code-driven animated video generation",
-            "Multi-aspect ratio rendering (16:9 & 9:16)",
-            "Automated scene synchronization",
-            "Local audio rendering engine"
-        )
+        // Only what was actually detected. No invented defaults: an empty
+        // detection stays empty instead of pretending to be TypeScript/React.
+        val tech = detectedTech
+        val features = detectedFeatures
 
         val personas = listOf("Open-source Maintainers", "Developer Advocates", "Technical Founders")
         val notableFiles = listOf("package.json", "src/Root.tsx", "README.md", "remotion.config.ts")
 
-        // Claim-evidence links from repo structure
-        val claimsWithEvidence = listOf(
-            ClaimEvidence(
+        // Claim-evidence links, verified against the supplied source text.
+        // Each candidate claim is only included when its evidence token was
+        // actually found in the source; anything else is dropped, not marked.
+        val claimsWithEvidence = listOfNotNull(
+            verifyClaim(
+                sourceText = sourceText,
                 claimText = "Automated promotional video rendering with code",
                 sourceFile = "package.json",
                 lineReference = "dependencies.remotion",
                 evidenceSnippet = "\"remotion\": \"^4.0.0\"",
-                isVerified = true,
-                verificationNotes = "Confirmed Remotion video framework dependency"
+                evidenceToken = "remotion"
             ),
-            ClaimEvidence(
+            verifyClaim(
+                sourceText = sourceText,
                 claimText = "Supports both landscape 16:9 and vertical 9:16 reels",
                 sourceFile = "src/Root.tsx",
                 lineReference = "lines 24-38",
                 evidenceSnippet = "<Composition id=\"Landscape16x9\" width={1920} height={1080} />",
-                isVerified = true,
-                verificationNotes = "Confirmed dual composition declarations in root"
+                evidenceToken = "Landscape16x9"
             ),
-            ClaimEvidence(
+            verifyClaim(
+                sourceText = sourceText,
                 claimText = "Zero-cloud local rendering pipeline",
                 sourceFile = "README.md",
                 lineReference = "section: Local Render",
                 evidenceSnippet = "npx remotion render src/index.ts out/promo.mp4",
-                isVerified = true,
-                verificationNotes = "Verified CLI rendering instructions in docs"
+                evidenceToken = "remotion render"
             )
         )
 
@@ -160,6 +168,31 @@ class SanitizedRepoScannerUseCase {
             excludedFiles = excluded,
             rawSourceDeleted = true,
             generatedAt = System.currentTimeMillis()
+        )
+    }
+
+    /**
+     * Returns the [ClaimEvidence] only when [evidenceToken] was actually
+     * found in [sourceText]. Otherwise returns null — the claim is dropped
+     * from the manifest instead of being marked verified without evidence.
+     */
+    private fun verifyClaim(
+        sourceText: String,
+        claimText: String,
+        sourceFile: String,
+        lineReference: String,
+        evidenceSnippet: String,
+        evidenceToken: String
+    ): ClaimEvidence? {
+        if (sourceText.isBlank()) return null
+        if (!sourceText.contains(evidenceToken, ignoreCase = true)) return null
+        return ClaimEvidence(
+            claimText = claimText,
+            sourceFile = sourceFile,
+            lineReference = lineReference,
+            evidenceSnippet = evidenceSnippet,
+            isVerified = true,
+            verificationNotes = "Evidence token '$evidenceToken' found in supplied source text"
         )
     }
 }

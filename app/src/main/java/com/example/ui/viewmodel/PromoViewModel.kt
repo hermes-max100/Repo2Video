@@ -68,6 +68,7 @@ import com.example.domain.manager.LocalVideoDownloadManager
 import com.example.data.model.CloudPromoProject
 import com.example.service.FirebasePromoSync
 import com.example.service.GeminiPromoService
+import com.example.service.HttpOpenMontageRenderService
 import com.example.service.GoogleAuthState
 import com.example.service.GoogleOAuthService
 import com.example.service.GoogleUserProfile
@@ -382,6 +383,9 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
 
     // Video Download to Local Device Storage
     val videoDownloadManager = LocalVideoDownloadManager(application)
+
+    // Direct access to the VPS render service for single-scene clips.
+    private val openMontageRenderService = HttpOpenMontageRenderService()
 
     private val _videoDownloadState = MutableStateFlow(VideoDownloadState())
     val videoDownloadState: StateFlow<VideoDownloadState> = _videoDownloadState.asStateFlow()
@@ -723,11 +727,15 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
             _scanStageText.value = "Connecting to repository: $normalized"
             _statusMessage.value = "Running deny-by-default secret scanning & payload sanitization..."
 
-            // 1. Sanitize content (enforcing budgets and secret filtering)
+            // 1. Sanitize content (enforcing budgets and secret filtering).
+            // The source is the content the user actually supplied (pasted
+            // repo text or a URL) — never a fabricated sample. When the user
+            // only typed a URL, the sanitized text is just that URL, so the
+            // manifest below verifies zero claims. That is the honest result.
             _scanProgressPercent.value = 35
-            _scanStageText.value = "Redacting secrets & sanitizing code files..."
-            val sampleContent = "Repository: $normalized\nPackage: ${policy.repoUrlOrPath}\nConfig: Remotion 4.0\nFramework: React 19\nLicense: MIT"
-            val payload = scannerUseCase.sanitizeRepositoryContent(sampleContent, policy)
+            _scanStageText.value = "Redacting secrets & sanitizing supplied content..."
+            val sourceContent = policy.repoUrlOrPath
+            val payload = scannerUseCase.sanitizeRepositoryContent(sourceContent, policy)
             _sanitizedPayload.value = payload
 
             // 2. Generate Deterministic Scan Manifest
@@ -736,7 +744,8 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
             val manifest = scannerUseCase.createDeterministicManifest(
                 repoUrl = normalized,
                 sanitizedPayload = payload,
-                customAppName = customAppName
+                customAppName = customAppName,
+                sourceText = sourceContent
             )
             _scanManifest.value = manifest
 
@@ -1241,23 +1250,42 @@ class PromoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun generateVeoVideoForScene(sceneIndex: Int) {
+    /**
+     * Renders one scene as a clip on the OpenMontage VPS (Remotion + Piper)
+     * and attaches the finished local file to the scene. This replaces the
+     * Veo motion-directive path, which only wrote a text directive into the
+     * subtitle and marked the scene VEO_AI_VIDEO — no video was ever made.
+     * A failed render is reported honestly; nothing is attached and no
+     * sample video is substituted.
+     */
+    fun generateOpenMontageClipForScene(sceneIndex: Int) {
         viewModelScope.launch {
             val scene = _scenes.value.getOrNull(sceneIndex) ?: return@launch
-            _statusMessage.value = "Generating Gemini motion directive for Scene ${sceneIndex + 1}..."
+            _statusMessage.value = "Rendering Scene ${sceneIndex + 1} on the OpenMontage VPS..."
 
-            val prompt = "${brandProfile.value.name} promo video background: ${scene.title}. ${scene.subtitle}. High resolution cinematic motion graphic, glowing neon elements, studio lighting."
-            val result = geminiService.generateVeoShotDirection(prompt, _activeAspectRatio.value)
+            val cacheDir = java.io.File(getApplication<Application>().cacheDir, "scene_clips")
+                .apply { if (!exists()) mkdirs() }
+            val clipFile = java.io.File(cacheDir, "scene_${sceneIndex + 1}_${System.currentTimeMillis()}.mp4")
 
-            result.onSuccess { directive ->
+            val result = openMontageRenderService.renderPromo(
+                brand = brandProfile.value,
+                scenes = listOf(scene),
+                aspectRatio = _activeAspectRatio.value,
+                outputFile = clipFile
+            )
+
+            result.onSuccess { rendered ->
                 val updatedScene = scene.copy(
-                    visualType = SceneVisualType.VEO_AI_VIDEO,
-                    subtitle = directive.take(120)
+                    visualType = SceneVisualType.OPENMONTAGE_RENDER,
+                    generatedVideoUrl = clipFile.absolutePath
                 )
                 updateScene(sceneIndex, updatedScene)
-                _statusMessage.value = "Gemini motion directive applied to Scene ${sceneIndex + 1}!"
+                _statusMessage.value =
+                    "OpenMontage clip rendered for Scene ${sceneIndex + 1} " +
+                        "(${rendered.frames} frames, ${rendered.resolution})!"
             }.onFailure { err ->
-                _statusMessage.value = "Gemini motion directive failed: ${err.localizedMessage ?: "Unknown error"}"
+                _statusMessage.value =
+                    "OpenMontage render failed for Scene ${sceneIndex + 1}: ${err.message}"
             }
         }
     }

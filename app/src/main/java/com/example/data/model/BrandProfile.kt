@@ -16,5 +16,10 @@ data class BrandProfile(
         "Automated codebase brand discovery"
     ),
     val targetAudience: String = "Software engineers, indie hackers & founders",
-    val repoPathOrUrl: String = "AKCodez/promo-video-skill"
+    val repoPathOrUrl: String = "AKCodez/promo-video-skill",
+    // A metric (e.g. GitHub stars, render count) may ONLY be set when it was
+    // verified from the repository itself. Null means "no verified metric"
+    // and any scene that needs a number must be skipped, never invented.
+    val verifiedMetricNumber: String? = null,
+    val verifiedMetricLabel: String? = null
 )
